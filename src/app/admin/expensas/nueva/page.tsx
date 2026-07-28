@@ -38,13 +38,13 @@ export default function NuevoPeriodoPage() {
   async function onSubmit(formData: FormData) {
     setError("");
     setCargando(true);
-    try {
-      const id = await crearPeriodoAction(formData);
-      router.push(`/admin/expensas/${id}`);
-    } catch (e: any) {
-      setError(e.message ?? "Error al crear el período");
+    const resultado = await crearPeriodoAction(formData);
+    if (!resultado.ok) {
+      setError(resultado.error);
       setCargando(false);
+      return;
     }
+    router.push(`/admin/expensas/${resultado.data.id}`);
   }
 
   return (
