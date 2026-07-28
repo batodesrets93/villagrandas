@@ -23,32 +23,58 @@ async function requirePropietario() {
 
 // ---------- ADMIN: expensas ----------
 
-export async function crearPeriodoAction(formData: FormData) {
-  await requireAdmin();
+type ResultadoAccion<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 
-  const etiqueta = String(formData.get("etiqueta"));
-  const fechaInicio = new Date(String(formData.get("fechaInicio")));
-  const fechaFin = new Date(String(formData.get("fechaFin")));
-  const vencimiento = new Date(String(formData.get("vencimiento")));
+// Nota sobre manejo de errores: Next.js oculta en producción el mensaje real
+// de cualquier error que se "lance" (throw) desde una Server Action, y lo
+// reemplaza por el texto generico "An error occurred in the Server
+// Components render...". Por eso estas acciones NO lanzan errores de
+// validacion: los devuelven como dato (`{ ok: false, error: "..." }`), y el
+// componente que las llama decide que mostrar. Los errores realmente
+// inesperados se registran con console.error (visibles en los logs de
+// Vercel) y se devuelve un mensaje generico pero legible.
 
-  const nombres = formData.getAll("catNombre") as string[];
-  const montos = formData.getAll("catMonto") as string[];
-  const fondos = formData.getAll("catFondo") as string[]; // indices marcados
+export async function crearPeriodoAction(formData: FormData): Promise<ResultadoAccion<{ id: string }>> {
+  try {
+    await requireAdmin();
 
-  const categorias = nombres
-    .map((nombre, i) => ({
-      nombre,
-      monto: parseFloat((montos[i] || "0").replace(/\./g, "").replace(",", ".")) || parseFloat(montos[i] || "0") || 0,
-      esFondoReserva: fondos.includes(String(i)),
-    }))
-    .filter((c) => c.nombre.trim() !== "" && c.monto > 0);
+    const etiqueta = String(formData.get("etiqueta"));
+    const fechaInicio = new Date(String(formData.get("fechaInicio")));
+    const fechaFin = new Date(String(formData.get("fechaFin")));
+    const vencimiento = new Date(String(formData.get("vencimiento")));
 
-  if (categorias.length === 0) throw new Error("Agregá al menos una categoría de gasto con monto.");
+    const nombres = formData.getAll("catNombre") as string[];
+    const montos = formData.getAll("catMonto") as string[];
+    const fondos = formData.getAll("catFondo") as string[]; // indices marcados
 
-  const periodo = await crearPeriodoYCalcular({ etiqueta, fechaInicio, fechaFin, vencimiento, categorias });
+    const categorias = nombres
+      .map((nombre, i) => ({
+        nombre,
+        monto:
+          parseFloat((montos[i] || "0").replace(/\./g, "").replace(",", ".")) || parseFloat(montos[i] || "0") || 0,
+        esFondoReserva: fondos.includes(String(i)),
+      }))
+      .filter((c) => c.nombre.trim() !== "" && c.monto > 0);
 
-  revalidatePath("/admin/expensas");
-  return periodo.id;
+    if (categorias.length === 0) {
+      return { ok: false, error: "Agregá al menos una categoría de gasto con monto." };
+    }
+    if (isNaN(fechaInicio.getTime()) || isNaN(fechaFin.getTime()) || isNaN(vencimiento.getTime())) {
+      return { ok: false, error: "Revisá las 3 fechas, alguna quedó vacía o mal escrita." };
+    }
+
+    const periodo = await crearPeriodoYCalcular({ etiqueta, fechaInicio, fechaFin, vencimiento, categorias });
+
+    revalidatePath("/admin/expensas");
+    return { ok: true, data: { id: periodo.id } };
+  } catch (e) {
+    console.error("[crearPeriodoAction] Error inesperado:", e);
+    return {
+      ok: false,
+      error:
+        "No se pudo liquidar el período por un error inesperado en el servidor. Probá de nuevo en un minuto; si se repite, revisá los logs de Vercel (pestaña Logs del proyecto) para ver el detalle.",
+    };
+  }
 }
 
 export async function registrarPagoAction(formData: FormData) {
@@ -97,36 +123,48 @@ export async function crearAccesoPropietarioAction(formData: FormData) {
 
 // ---------- RESERVAS (propietario y admin) ----------
 
-export async function crearReservaAction(formData: FormData) {
-  const session = await requirePropietario();
-  const quinchoId = String(formData.get("quinchoId"));
-  const fecha = new Date(String(formData.get("fecha")));
-  const turno = String(formData.get("turno")) as "MEDIODIA" | "NOCHE";
+export async function crearReservaAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    const session = await requirePropietario();
+    const quinchoId = String(formData.get("quinchoId"));
+    const fecha = new Date(String(formData.get("fecha")));
+    const turno = String(formData.get("turno")) as "MEDIODIA" | "NOCHE";
 
-  const ahora = new Date();
-  const horasHastaEvento = (fecha.getTime() - ahora.getTime()) / (1000 * 60 * 60);
-  if (horasHastaEvento < 24) {
-    throw new Error("Las reservas deben hacerse con un mínimo de 24 horas de anticipación.");
+    if (isNaN(fecha.getTime())) {
+      return { ok: false, error: "Elegí una fecha válida." };
+    }
+
+    const ahora = new Date();
+    const horasHastaEvento = (fecha.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+    if (horasHastaEvento < 24) {
+      return { ok: false, error: "Las reservas deben hacerse con un mínimo de 24 horas de anticipación." };
+    }
+
+    const existente = await prisma.reserva.findFirst({
+      where: { quinchoId, fecha, turno, estado: "CONFIRMADA" },
+    });
+    if (existente) {
+      return { ok: false, error: "Ese quincho ya está reservado para ese día y turno." };
+    }
+
+    await prisma.reserva.create({
+      data: {
+        quinchoId,
+        fecha,
+        turno,
+        unidadId: session.user.unidadId!,
+        usuarioId: session.user.id,
+        montoAplicado: MONTO_QUINCHO,
+      },
+    });
+
+    revalidatePath("/propietario/reservas");
+    revalidatePath("/admin/reservas");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[crearReservaAction] Error inesperado:", e);
+    return { ok: false, error: "No se pudo crear la reserva por un error inesperado. Probá de nuevo en un minuto." };
   }
-
-  const existente = await prisma.reserva.findFirst({
-    where: { quinchoId, fecha, turno, estado: "CONFIRMADA" },
-  });
-  if (existente) throw new Error("Ese quincho ya está reservado para ese día y turno.");
-
-  await prisma.reserva.create({
-    data: {
-      quinchoId,
-      fecha,
-      turno,
-      unidadId: session.user.unidadId!,
-      usuarioId: session.user.id,
-      montoAplicado: MONTO_QUINCHO,
-    },
-  });
-
-  revalidatePath("/propietario/reservas");
-  revalidatePath("/admin/reservas");
 }
 
 export async function cancelarReservaAction(formData: FormData) {
@@ -147,22 +185,30 @@ export async function cancelarReservaAction(formData: FormData) {
 
 // ---------- RECLAMOS ----------
 
-export async function crearReclamoAction(formData: FormData) {
-  const session = await requirePropietario();
-  const titulo = String(formData.get("titulo"));
-  const descripcion = String(formData.get("descripcion"));
-  if (!titulo.trim() || !descripcion.trim()) throw new Error("Completá título y descripción.");
+export async function crearReclamoAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    const session = await requirePropietario();
+    const titulo = String(formData.get("titulo"));
+    const descripcion = String(formData.get("descripcion"));
+    if (!titulo.trim() || !descripcion.trim()) {
+      return { ok: false, error: "Completá título y descripción." };
+    }
 
-  await prisma.reclamo.create({
-    data: {
-      titulo,
-      descripcion,
-      unidadId: session.user.unidadId!,
-      usuarioId: session.user.id,
-    },
-  });
-  revalidatePath("/propietario/reclamos");
-  revalidatePath("/admin/reclamos");
+    await prisma.reclamo.create({
+      data: {
+        titulo,
+        descripcion,
+        unidadId: session.user.unidadId!,
+        usuarioId: session.user.id,
+      },
+    });
+    revalidatePath("/propietario/reclamos");
+    revalidatePath("/admin/reclamos");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[crearReclamoAction] Error inesperado:", e);
+    return { ok: false, error: "No se pudo enviar el reclamo por un error inesperado. Probá de nuevo en un minuto." };
+  }
 }
 
 export async function responderReclamoAction(formData: FormData) {
