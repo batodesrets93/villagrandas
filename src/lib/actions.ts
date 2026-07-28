@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { crearPeriodoYCalcular, registrarPago, actualizarCalefaccion, MONTO_QUINCHO } from "@/lib/calculo";
+import { crearPeriodoYCalcular, actualizarPeriodoYCalcular, registrarPago, actualizarCalefaccion, MONTO_QUINCHO } from "@/lib/calculo";
 
 /**
  * Interpreta un monto escrito a mano, aceptando cualquiera de estas formas:
@@ -109,6 +109,53 @@ export async function crearPeriodoAction(formData: FormData): Promise<ResultadoA
       ok: false,
       error:
         "No se pudo liquidar el período por un error inesperado en el servidor. Probá de nuevo en un minuto; si se repite, revisá los logs de Vercel (pestaña Logs del proyecto) para ver el detalle.",
+    };
+  }
+}
+
+export async function actualizarPeriodoAction(formData: FormData): Promise<ResultadoAccion<{ id: string }>> {
+  try {
+    await requireAdmin();
+
+    const periodoId = String(formData.get("periodoId"));
+    const etiqueta = String(formData.get("etiqueta"));
+    const fechaInicio = new Date(String(formData.get("fechaInicio")));
+    const fechaFin = new Date(String(formData.get("fechaFin")));
+    const vencimiento = new Date(String(formData.get("vencimiento")));
+
+    const nombres = formData.getAll("catNombre") as string[];
+    const montos = formData.getAll("catMonto") as string[];
+    const fondos = formData.getAll("catFondo") as string[];
+
+    const categorias = nombres
+      .map((nombre, i) => ({
+        nombre,
+        monto: parseMonto(montos[i]),
+        esFondoReserva: fondos.includes(String(i)),
+      }))
+      .filter((c) => c.nombre.trim() !== "" && c.monto > 0);
+
+    if (!periodoId) {
+      return { ok: false, error: "No se encontró el período a editar." };
+    }
+    if (categorias.length === 0) {
+      return { ok: false, error: "Agregá al menos una categoría de gasto con monto." };
+    }
+    if (isNaN(fechaInicio.getTime()) || isNaN(fechaFin.getTime()) || isNaN(vencimiento.getTime())) {
+      return { ok: false, error: "Revisá las 3 fechas, alguna quedó vacía o mal escrita." };
+    }
+
+    await actualizarPeriodoYCalcular(periodoId, { etiqueta, fechaInicio, fechaFin, vencimiento, categorias });
+
+    revalidatePath("/admin/expensas");
+    revalidatePath(`/admin/expensas/${periodoId}`);
+    revalidatePath("/propietario");
+    return { ok: true, data: { id: periodoId } };
+  } catch (e) {
+    console.error("[actualizarPeriodoAction] Error inesperado:", e);
+    return {
+      ok: false,
+      error: "No se pudo actualizar el período por un error inesperado en el servidor. Probá de nuevo en un minuto.",
     };
   }
 }

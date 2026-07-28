@@ -172,3 +172,58 @@ export async function actualizarCalefaccion(cargoId: string, calefaccion: number
     data: { calefaccion, total, saldoActual },
   });
 }
+
+/**
+ * Recalcula un período YA EXISTENTE con nuevas categorías de gasto, en vez
+ * de crear uno nuevo. Se mantienen intactos: cochera, baulera, quincho,
+ * calefacción, saldo anterior y los pagos ya registrados de cada unidad;
+ * solo se vuelve a calcular el gasto común y los totales.
+ */
+export async function actualizarPeriodoYCalcular(
+  periodoId: string,
+  params: {
+    etiqueta: string;
+    fechaInicio: Date;
+    fechaFin: Date;
+    vencimiento: Date;
+    categorias: CategoriaInput[];
+  }
+) {
+  const totalGastos = params.categorias.reduce((acc, c) => acc + c.monto, 0);
+
+  await prisma.periodoExpensa.update({
+    where: { id: periodoId },
+    data: {
+      etiqueta: params.etiqueta,
+      fechaInicio: params.fechaInicio,
+      fechaFin: params.fechaFin,
+      vencimiento: params.vencimiento,
+      totalGastos,
+    },
+  });
+
+  await prisma.gastoCategoria.deleteMany({ where: { periodoId } });
+  await prisma.gastoCategoria.createMany({
+    data: params.categorias.map((c, i) => ({
+      periodoId,
+      nombre: c.nombre,
+      monto: c.monto,
+      esFondoReserva: c.esFondoReserva ?? false,
+      orden: i,
+    })),
+  });
+
+  // Recalcula el gasto común y el total de las 79 unidades en UNA sola
+  // consulta SQL (en vez de una actualización por unidad), para no repetir
+  // el problema de lentitud que causaba el timeout al crear un período.
+  await prisma.$executeRaw`
+    UPDATE "CargoUnidadPeriodo" AS c
+    SET
+      "gastoComun" = ${totalGastos} * u."coeficiente",
+      "total" = (${totalGastos} * u."coeficiente") + c."cochera" + c."baulera" + c."quincho" + c."calefaccion",
+      "saldoActual" = ((${totalGastos} * u."coeficiente") + c."cochera" + c."baulera" + c."quincho" + c."calefaccion")
+                       + c."saldoAnterior" - c."totalPagado"
+    FROM "Unidad" AS u
+    WHERE c."unidadId" = u."id" AND c."periodoId" = ${periodoId}
+  `;
+}
