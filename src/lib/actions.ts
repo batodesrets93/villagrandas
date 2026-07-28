@@ -7,6 +7,43 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { crearPeriodoYCalcular, registrarPago, actualizarCalefaccion, MONTO_QUINCHO } from "@/lib/calculo";
 
+/**
+ * Interpreta un monto escrito a mano, aceptando cualquiera de estas formas:
+ *   1801246.07   (punto como decimal, sin separador de miles)
+ *   1801246      (sin separadores)
+ *   1.801.246    (punto como separador de miles, sin decimales)
+ *   1.801.246,07 (formato argentino: punto de miles, coma decimal)
+ *   1801246,07   (coma como decimal, sin separador de miles)
+ */
+function parseMonto(raw: string | undefined | null): number {
+  if (!raw) return 0;
+  let s = String(raw).trim().replace(/[^\d.,-]/g, "");
+  if (s === "") return 0;
+
+  const tieneComa = s.includes(",");
+  const tienePunto = s.includes(".");
+
+  if (tieneComa && tienePunto) {
+    // Formato argentino: 1.801.246,07 -> el punto es separador de miles
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else if (tieneComa && !tienePunto) {
+    // 1801246,07 -> la coma es el separador decimal
+    s = s.replace(",", ".");
+  } else if (tienePunto && !tieneComa) {
+    const partes = s.split(".");
+    const ultima = partes[partes.length - 1];
+    if (partes.length === 2 && ultima.length <= 2) {
+      // 1801246.07 -> el punto ya es decimal, se deja como está
+    } else {
+      // 1.801.246 (o varios puntos) -> son separadores de miles
+      s = s.replace(/\./g, "");
+    }
+  }
+
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.rol !== "ADMIN") throw new Error("No autorizado");
@@ -50,8 +87,7 @@ export async function crearPeriodoAction(formData: FormData): Promise<ResultadoA
     const categorias = nombres
       .map((nombre, i) => ({
         nombre,
-        monto:
-          parseFloat((montos[i] || "0").replace(/\./g, "").replace(",", ".")) || parseFloat(montos[i] || "0") || 0,
+        monto: parseMonto(montos[i]),
         esFondoReserva: fondos.includes(String(i)),
       }))
       .filter((c) => c.nombre.trim() !== "" && c.monto > 0);
@@ -77,25 +113,71 @@ export async function crearPeriodoAction(formData: FormData): Promise<ResultadoA
   }
 }
 
-export async function registrarPagoAction(formData: FormData) {
-  await requireAdmin();
-  const cargoId = String(formData.get("cargoId"));
-  const monto = Number(formData.get("monto"));
-  const medio = String(formData.get("medio") || "");
-  const nota = String(formData.get("nota") || "");
-  if (!cargoId || !monto || monto <= 0) throw new Error("Monto inválido");
+export async function registrarPagoAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    await requireAdmin();
+    const cargoId = String(formData.get("cargoId"));
+    const monto = parseMonto(String(formData.get("monto")));
+    const medio = String(formData.get("medio") || "");
+    const nota = String(formData.get("nota") || "");
+    if (!cargoId || !monto || monto <= 0) {
+      return { ok: false, error: "El monto tiene que ser un número mayor a cero." };
+    }
 
-  await registrarPago(cargoId, monto, medio, nota);
-  revalidatePath("/admin/expensas");
-  revalidatePath("/propietario");
+    await registrarPago(cargoId, monto, medio, nota);
+    revalidatePath("/admin/expensas");
+    revalidatePath("/propietario");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[registrarPagoAction] Error inesperado:", e);
+    return { ok: false, error: "No se pudo registrar el pago por un error inesperado. Probá de nuevo." };
+  }
 }
 
-export async function actualizarCalefaccionAction(formData: FormData) {
-  await requireAdmin();
-  const cargoId = String(formData.get("cargoId"));
-  const calefaccion = Number(formData.get("calefaccion"));
-  await actualizarCalefaccion(cargoId, isNaN(calefaccion) ? 0 : calefaccion);
-  revalidatePath("/admin/expensas");
+export async function actualizarCalefaccionAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    await requireAdmin();
+    const cargoId = String(formData.get("cargoId"));
+    const calefaccion = parseMonto(String(formData.get("calefaccion")));
+    await actualizarCalefaccion(cargoId, calefaccion);
+    revalidatePath("/admin/expensas");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[actualizarCalefaccionAction] Error inesperado:", e);
+    return { ok: false, error: "No se pudo actualizar la calefacción por un error inesperado. Probá de nuevo." };
+  }
+}
+
+export async function eliminarPeriodoAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    await requireAdmin();
+    const periodoId = String(formData.get("periodoId"));
+
+    await prisma.$transaction(async (tx) => {
+      const cargos = await tx.cargoUnidadPeriodo.findMany({ where: { periodoId }, select: { id: true } });
+      const cargoIds = cargos.map((c) => c.id);
+
+      // Las reservas de quincho que habían quedado facturadas en este período
+      // vuelven a quedar "pendientes de facturar", para que se cobren en el
+      // próximo período que se liquide bien.
+      if (cargoIds.length > 0) {
+        await tx.reserva.updateMany({
+          where: { cargoId: { in: cargoIds } },
+          data: { cargoId: null },
+        });
+      }
+
+      // Al borrar el período se borran en cascada sus categorías de gasto,
+      // los cargos por unidad y los pagos que se hubieran registrado ahí.
+      await tx.periodoExpensa.delete({ where: { id: periodoId } });
+    });
+
+    revalidatePath("/admin/expensas");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[eliminarPeriodoAction] Error inesperado:", e);
+    return { ok: false, error: "No se pudo eliminar el período por un error inesperado. Probá de nuevo." };
+  }
 }
 
 // ---------- ADMIN: unidades / propietarios ----------
