@@ -113,7 +113,7 @@ export async function crearPeriodoAction(formData: FormData): Promise<ResultadoA
   }
 }
 
-export async function registrarPagoAction(formData: FormData): Promise<ResultadoAccion> {
+export async function registrarPagoAction(formData: FormData): Promise<void> {
   try {
     await requireAdmin();
     const cargoId = String(formData.get("cargoId"));
@@ -121,30 +121,27 @@ export async function registrarPagoAction(formData: FormData): Promise<Resultado
     const medio = String(formData.get("medio") || "");
     const nota = String(formData.get("nota") || "");
     if (!cargoId || !monto || monto <= 0) {
-      return { ok: false, error: "El monto tiene que ser un número mayor a cero." };
+      console.error("[registrarPagoAction] Monto inválido:", formData.get("monto"));
+      return;
     }
 
     await registrarPago(cargoId, monto, medio, nota);
     revalidatePath("/admin/expensas");
     revalidatePath("/propietario");
-    return { ok: true, data: undefined };
   } catch (e) {
     console.error("[registrarPagoAction] Error inesperado:", e);
-    return { ok: false, error: "No se pudo registrar el pago por un error inesperado. Probá de nuevo." };
   }
 }
 
-export async function actualizarCalefaccionAction(formData: FormData): Promise<ResultadoAccion> {
+export async function actualizarCalefaccionAction(formData: FormData): Promise<void> {
   try {
     await requireAdmin();
     const cargoId = String(formData.get("cargoId"));
     const calefaccion = parseMonto(String(formData.get("calefaccion")));
     await actualizarCalefaccion(cargoId, calefaccion);
     revalidatePath("/admin/expensas");
-    return { ok: true, data: undefined };
   } catch (e) {
     console.error("[actualizarCalefaccionAction] Error inesperado:", e);
-    return { ok: false, error: "No se pudo actualizar la calefacción por un error inesperado. Probá de nuevo." };
   }
 }
 
