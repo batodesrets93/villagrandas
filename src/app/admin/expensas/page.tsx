@@ -46,6 +46,9 @@ export default async function ExpensasPage() {
                       <Link href={`/admin/expensas/${p.id}`} className="text-brand-600 underline text-sm">
                         Ver detalle
                       </Link>
+                      <Link href={`/admin/expensas/${p.id}/editar`} className="text-brand-600 underline text-sm">
+                        Editar
+                      </Link>
                       <EliminarPeriodoButton periodoId={p.id} etiqueta={p.etiqueta} />
                     </div>
                   </td>
