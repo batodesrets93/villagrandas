@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Rol {
+  ADMIN
+  PROPIETARIO
+}
+
+enum Torre {
+  GRANDE
+  CHICA
+}
+
+enum Turno {
+  MEDIODIA
+  NOCHE
+}
+
+enum EstadoReserva {
+  CONFIRMADA
+  CANCELADA
+}
+
+enum EstadoReclamo {
+  ABIERTO
+  RESPONDIDO
+  CERRADO
+}
+
+model Usuario {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  nombre       String
+  rol          Rol
+  unidadId     String?
+  unidad       Unidad?   @relation(fields: [unidadId], references: [id])
+  reclamos     Reclamo[]
+  reservas     Reserva[]
+  createdAt    DateTime  @default(now())
+}
+
+model Unidad {
+  id           String   @id @default(cuid())
+  torre        Torre
+  piso         String
+  depto        String
+  titular      String
+  ambientes    String
+  m2           Float
+  coeficiente  Float
+  cocheraMonto Float    @default(0)
+  bauleraMonto Float    @default(0)
+
+  usuarios     Usuario[]
+  cargos       CargoUnidadPeriodo[]
+  reservas     Reserva[]
+  reclamos     Reclamo[]
+
+  @@unique([torre, piso, depto])
+}
+
+model PeriodoExpensa {
+  id          String    @id @default(cuid())
+  etiqueta    String
+  fechaInicio DateTime
+  fechaFin    DateTime
+  vencimiento DateTime
+  totalGastos Float     @default(0)
+  cerrado     Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  gastos      GastoCategoria[]
+  cargos      CargoUnidadPeriodo[]
+}
+
+model GastoCategoria {
+  id             String         @id @default(cuid())
+  periodoId      String
+  periodo        PeriodoExpensa @relation(fields: [periodoId], references: [id], onDelete: Cascade)
+  nombre         String
+  monto          Float
+  esFondoReserva Boolean        @default(false)
+  orden          Int            @default(0)
+}
+
+model CargoUnidadPeriodo {
+  id            String         @id @default(cuid())
+  periodoId     String
+  periodo       PeriodoExpensa @relation(fields: [periodoId], references: [id], onDelete: Cascade)
+  unidadId      String
+  unidad        Unidad         @relation(fields: [unidadId], references: [id])
+
+  gastoComun    Float
+  cochera       Float          @default(0)
+  baulera       Float          @default(0)
+  quincho       Float          @default(0)
+  calefaccion   Float          @default(0)
+  total         Float
+  saldoAnterior Float          @default(0)
+  totalPagado   Float          @default(0)
+  saldoActual   Float
+
+  pagos         Pago[]
+  reservas      Reserva[]
+
+  @@unique([periodoId, unidadId])
+}
+
+model Pago {
+  id      String             @id @default(cuid())
+  cargoId String
+  cargo   CargoUnidadPeriodo @relation(fields: [cargoId], references: [id], onDelete: Cascade)
+  monto   Float
+  fecha   DateTime           @default(now())
+  medio   String?
+  nota    String?
+}
+
+model Quincho {
+  id             String    @id @default(cuid())
+  nombre         String    @unique
+  capacidad      Int
+  permitePiscina Boolean   @default(true)
+  reservas       Reserva[]
+}
+
+model Reserva {
+  id            String              @id @default(cuid())
+  quinchoId     String
+  quincho       Quincho             @relation(fields: [quinchoId], references: [id])
+  unidadId      String
+  unidad        Unidad              @relation(fields: [unidadId], references: [id])
+  usuarioId     String
+  usuario       Usuario             @relation(fields: [usuarioId], references: [id])
+  fecha         DateTime
+  turno         Turno
+  estado        EstadoReserva       @default(CONFIRMADA)
+  montoAplicado Float               @default(50000)
+  cargoId       String?
+  cargo         CargoUnidadPeriodo? @relation(fields: [cargoId], references: [id])
+  createdAt     DateTime            @default(now())
+
+  @@unique([quinchoId, fecha, turno])
+}
+
+model Reclamo {
+  id           String        @id @default(cuid())
+  unidadId     String
+  unidad       Unidad        @relation(fields: [unidadId], references: [id])
+  usuarioId    String
+  usuario      Usuario       @relation(fields: [usuarioId], references: [id])
+  titulo       String
+  descripcion  String
+  estado       EstadoReclamo @default(ABIERTO)
+  respuesta    String?
+  createdAt    DateTime      @default(now())
+  respondidoAt DateTime?
+}
