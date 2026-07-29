@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { getEvolucionMorosidad, getTopDeudores } from "@/lib/dashboard";
-import EvolucionMorosidadChart from "./EvolucionMorosidadChart";
+import MorosidadChart from "@/components/MorosidadChart";
 
 function money(n: number) {
   return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -9,20 +8,38 @@ function money(n: number) {
 
 export default async function AdminDashboard() {
   const totalUnidades = await prisma.unidad.count();
-  const ultimoPeriodo = await prisma.periodoExpensa.findFirst({
+
+  const periodosRecientes = await prisma.periodoExpensa.findMany({
     orderBy: { fechaInicio: "desc" },
-    include: { cargos: true },
+    take: 6,
+    include: { cargos: { include: { unidad: true } } },
   });
 
-  const deudaTotal = ultimoPeriodo ? ultimoPeriodo.cargos.reduce((acc, c) => acc + c.saldoActual, 0) : 0;
+  const ultimoPeriodo = periodosRecientes[0] ?? null;
+
+  const deudaTotal = ultimoPeriodo
+    ? ultimoPeriodo.cargos.reduce((acc, c) => acc + c.saldoActual, 0)
+    : 0;
+
+  const historialMorosidad = periodosRecientes
+    .slice()
+    .reverse()
+    .map((p) => ({
+      etiqueta: p.etiqueta,
+      deuda: p.cargos.reduce((acc, c) => acc + c.saldoActual, 0),
+    }));
+
+  const topDeudores = ultimoPeriodo
+    ? [...ultimoPeriodo.cargos]
+        .filter((c) => c.saldoActual > 0)
+        .sort((a, b) => b.saldoActual - a.saldoActual)
+        .slice(0, 5)
+    : [];
+
   const reclamosAbiertos = await prisma.reclamo.count({ where: { estado: { in: ["ABIERTO", "RESPONDIDO"] } } });
   const proximasReservas = await prisma.reserva.count({
     where: { estado: "CONFIRMADA", fecha: { gte: new Date() } },
   });
-
-  const evolucion = await getEvolucionMorosidad();
-  const { deudores } = await getTopDeudores();
-  const maxDeudor = deudores.length > 0 ? deudores[0].saldoActual : 0;
 
   return (
     <div className="space-y-6">
@@ -47,61 +64,34 @@ export default async function AdminDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-4">
-        <div className="card">
-          <h2 className="font-bold mb-1">Evolución de morosidad</h2>
-          <p className="text-sm text-gray-500 mb-3">Deuda total al cierre de cada período liquidado</p>
-          <EvolucionMorosidadChart datos={evolucion} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="card lg:col-span-2">
+          <p className="text-sm text-gray-500 mb-3">Evolución de la deuda total por período</p>
+          <MorosidadChart datos={historialMorosidad} />
         </div>
 
         <div className="card">
-          <h2 className="font-bold mb-1">Top {deudores.length || 5} deudores</h2>
-          <p className="text-sm text-gray-500 mb-3">
-            Mayor saldo actual, último período liquidado. No incluye unidades del edificio.
-          </p>
-          {deudores.length === 0 ? (
-            <p className="text-sm text-gray-500">No hay unidades con saldo pendiente en el último período. 🎉</p>
+          <p className="text-sm text-gray-500 mb-3">Top 5 deudores (último período)</p>
+          {topDeudores.length === 0 ? (
+            <p className="text-sm text-gray-500">No hay deudas pendientes en el último período.</p>
           ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Unidad</th>
-                  <th style={{ textAlign: "right" }}>Saldo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {deudores.map((d, i) => (
-                  <tr key={d.unidadId}>
-                    <td>
-                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-brand-100 text-brand-700 font-bold text-xs">
-                        {i + 1}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="font-semibold">{d.titular}</div>
-                      <div className="text-xs text-gray-500">
-                        {d.torre === "GRANDE" ? "Torre Grande" : "Torre Chica"} · {d.piso}
-                        {d.depto}
-                      </div>
-                      <div className="w-full h-1 bg-gray-100 rounded mt-1 overflow-hidden">
-                        <div
-                          className="h-full bg-red-700 rounded"
-                          style={{ width: `${maxDeudor > 0 ? (d.saldoActual / maxDeudor) * 100 : 0}%` }}
-                        />
-                      </div>
-                    </td>
-                    <td className="text-right font-bold text-red-700">{money(d.saldoActual)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <ul className="divide-y">
+              {topDeudores.map((c) => (
+                <li key={c.id} className="py-2 flex justify-between items-baseline gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-brand-700 truncate">
+                      {c.unidad.torre === "GRANDE" ? "Grande" : "Chica"} {c.unidad.piso}º{c.unidad.depto}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate">{c.unidad.titular}</p>
+                  </div>
+                  <span className="text-sm font-semibold whitespace-nowrap">{money(c.saldoActual)}</span>
+                </li>
+              ))}
+            </ul>
           )}
-          <p className="mt-3">
-            <Link href="/admin/unidades" className="text-brand-600 text-sm font-semibold hover:underline">
-              Ver todas las unidades →
-            </Link>
-          </p>
+          <Link href="/admin/unidades" className="text-sm text-brand-600 underline mt-3 inline-block">
+            Ver todas las unidades
+          </Link>
         </div>
       </div>
 
