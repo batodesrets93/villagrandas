@@ -13,14 +13,14 @@ type UnidadRow = {
   depto: string;
   titular: string;
   m2: number;
-  cocheraMonto: number;
-  bauleraMonto: number;
+  cocheraM2: number;
+  bauleraM2: number;
   esDesarrollador: boolean;
   email: string | null;
 };
 
-function money(n: number) {
-  return n ? "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2 }) : "-";
+function m2Texto(n: number) {
+  return n ? n.toLocaleString("es-AR", { minimumFractionDigits: 1 }) + " m²" : "-";
 }
 
 function normalizar(s: string) {
@@ -52,8 +52,8 @@ export default function UnidadesTable({ unidades }: { unidades: UnidadRow[] }) {
       Depto: u.depto,
       Titular: u.titular,
       "m²": u.m2,
-      Cochera: u.cocheraMonto,
-      Baulera: u.bauleraMonto,
+      "Cochera (m²)": u.cocheraM2,
+      "Baulera (m²)": u.bauleraM2,
       Edificio: u.esDesarrollador ? "Sí" : "No",
       Email: u.email ?? "",
     }));
@@ -107,8 +107,8 @@ export default function UnidadesTable({ unidades }: { unidades: UnidadRow[] }) {
               <th>Depto</th>
               <th>Titular</th>
               <th>m²</th>
-              <th>Cochera</th>
-              <th>Baulera</th>
+              <th title="m² asignado; el monto se calcula por período">Cochera</th>
+              <th title="m² asignado; el monto se calcula por período">Baulera</th>
               <th title="No aparece en el ranking de deudores del dashboard">Edificio</th>
               <th>Acceso</th>
               <th></th>
@@ -122,8 +122,8 @@ export default function UnidadesTable({ unidades }: { unidades: UnidadRow[] }) {
                 <td>{u.depto}</td>
                 <td>{u.titular}</td>
                 <td>{u.m2}</td>
-                <td>{money(u.cocheraMonto)}</td>
-                <td>{money(u.bauleraMonto)}</td>
+                <td>{m2Texto(u.cocheraM2)}</td>
+                <td>{m2Texto(u.bauleraM2)}</td>
                 <td>
                   <DesarrolladorToggle unidadId={u.id} checked={u.esDesarrollador} />
                 </td>
