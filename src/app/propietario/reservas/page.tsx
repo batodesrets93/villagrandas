@@ -2,6 +2,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { cancelarReservaAction } from "@/lib/actions";
+import { startOfMonth, endOfMonth, parse, parseISO, isValid } from "date-fns";
+import CalendarioReservas, { ReservaCalendario } from "@/components/CalendarioReservas";
 import NuevaReservaForm from "./NuevaReservaForm";
 
 const INFO_QUINCHO: Record<string, string> = {
@@ -10,16 +12,25 @@ const INFO_QUINCHO: Record<string, string> = {
   Amado: "Capacidad 18 personas · sin acceso a piscina",
 };
 
-export default async function ReservasPropietarioPage() {
+export default async function ReservasPropietarioPage({
+  searchParams,
+}: {
+  searchParams: { mes?: string; dia?: string };
+}) {
   const session = await getServerSession(authOptions);
   const quinchos = await prisma.quincho.findMany({ orderBy: { nombre: "asc" } });
 
-  const desde = new Date();
-  const hasta = new Date();
-  hasta.setDate(hasta.getDate() + 45);
+  const mes = searchParams.mes ? parse(searchParams.mes, "yyyy-MM", new Date()) : new Date();
+  const mesValido = isValid(mes) ? mes : new Date();
+
+  const diaSeleccionado =
+    searchParams.dia && isValid(parseISO(searchParams.dia)) ? parseISO(searchParams.dia) : undefined;
 
   const ocupadas = await prisma.reserva.findMany({
-    where: { estado: "CONFIRMADA", fecha: { gte: desde, lte: hasta } },
+    where: {
+      estado: "CONFIRMADA",
+      fecha: { gte: startOfMonth(mesValido), lte: endOfMonth(mesValido) },
+    },
     include: { unidad: true, quincho: true },
     orderBy: { fecha: "asc" },
   });
@@ -29,6 +40,16 @@ export default async function ReservasPropietarioPage() {
     include: { quincho: true },
     orderBy: { fecha: "asc" },
   });
+
+  const reservasCalendario: ReservaCalendario[] = ocupadas.map((r) => ({
+    id: r.id,
+    fecha: r.fecha,
+    turno: r.turno,
+    quinchoNombre: r.quincho.nombre,
+    unidadLabel: `${r.unidad.torre === "GRANDE" ? "TG" : "TC"} ${r.unidad.piso}º${r.unidad.depto}`,
+    facturada: !!r.cargoId,
+    puedeCancelar: r.unidadId === session!.user.unidadId && !r.cargoId,
+  }));
 
   return (
     <div className="space-y-6">
@@ -94,37 +115,14 @@ export default async function ReservasPropietarioPage() {
         </table>
       </div>
 
-      <div className="card overflow-x-auto">
-        <h2 className="font-semibold mb-3">Disponibilidad (próximos 45 días)</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Turno</th>
-              <th>Quincho</th>
-              <th>Unidad</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ocupadas.map((r) => (
-              <tr key={r.id}>
-                <td>{r.fecha.toLocaleDateString("es-AR")}</td>
-                <td>{r.turno === "MEDIODIA" ? "Mediodía" : "Noche"}</td>
-                <td>{r.quincho.nombre}</td>
-                <td>
-                  {r.unidad.torre === "GRANDE" ? "TG" : "TC"} {r.unidad.piso}º{r.unidad.depto}
-                </td>
-              </tr>
-            ))}
-            {ocupadas.length === 0 && (
-              <tr>
-                <td colSpan={4} className="text-center text-gray-400 py-4">
-                  No hay reservas en los próximos 45 días. ¡Todo libre!
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div>
+        <h2 className="font-semibold mb-3 text-brand-700">Disponibilidad</h2>
+        <CalendarioReservas
+          mes={mesValido}
+          reservas={reservasCalendario}
+          diaSeleccionado={diaSeleccionado}
+          basePath="/propietario/reservas"
+        />
       </div>
     </div>
   );
