@@ -1,6 +1,16 @@
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
+import { authOptions } from "@/lib/auth";
 import NavPropietario from "@/components/NavPropietario";
 
-export default function PropietarioLayout({ children }: { children: React.ReactNode }) {
+export default async function PropietarioLayout({ children }: { children: React.ReactNode }) {
+  const session = await getServerSession(authOptions);
+  const rol = (session?.user as any)?.rol;
+
+  if (rol !== "PROPIETARIO") {
+    redirect("/login");
+  }
+
   return (
     <div>
       <NavPropietario />
