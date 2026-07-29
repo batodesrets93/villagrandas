@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { crearPeriodoYCalcular, actualizarPeriodoYCalcular, registrarPago, actualizarCalefaccion, MONTO_QUINCHO } from "@/lib/calculo";
+import { generarPdfLiquidacion } from "@/lib/pdf";
+import { enviarLiquidacionPorEmail } from "@/lib/email";
 
 /**
  * Interpreta un monto escrito a mano, aceptando cualquiera de estas formas:
@@ -221,6 +223,108 @@ export async function eliminarPeriodoAction(formData: FormData): Promise<Resulta
   } catch (e) {
     console.error("[eliminarPeriodoAction] Error inesperado:", e);
     return { ok: false, error: "No se pudo eliminar el período por un error inesperado. Probá de nuevo." };
+  }
+}
+
+function unidadLabel(u: { torre: "GRANDE" | "CHICA"; piso: string; depto: string }) {
+  return `${u.torre === "GRANDE" ? "TG" : "TC"} ${u.piso}º${u.depto}`;
+}
+
+/**
+ * Genera el PDF de liquidación de cada unidad (o de una sola, si se pasa
+ * `cargoId`) y lo envía por email a las direcciones registradas de esa
+ * unidad (los emails con los que sus propietarios tienen acceso al sitio).
+ * Las unidades sin ningún usuario con acceso creado se listan en `sinEmail`
+ * para que el admin sepa a quién le falta cargar el acceso.
+ */
+export async function enviarLiquidacionesPorEmailAction(
+  formData: FormData
+): Promise<ResultadoAccion<{ enviados: number; sinEmail: string[] }>> {
+  try {
+    await requireAdmin();
+    const periodoId = String(formData.get("periodoId"));
+    const cargoIdRaw = formData.get("cargoId");
+    const cargoId = cargoIdRaw ? String(cargoIdRaw) : null;
+
+    const periodo = await prisma.periodoExpensa.findUniqueOrThrow({
+      where: { id: periodoId },
+      include: {
+        cargos: {
+          where: cargoId ? { id: cargoId } : undefined,
+          include: { unidad: { include: { usuarios: true } } },
+        },
+      },
+    });
+
+    if (periodo.cargos.length === 0) {
+      return { ok: false, error: "No hay unidades para enviar en este período." };
+    }
+
+    let enviados = 0;
+    const sinEmail: string[] = [];
+
+    for (const cargo of periodo.cargos) {
+      const label = unidadLabel(cargo.unidad);
+      const emails = Array.from(new Set(cargo.unidad.usuarios.map((u) => u.email).filter(Boolean)));
+
+      if (emails.length === 0) {
+        sinEmail.push(label);
+        continue;
+      }
+
+      const pdfBytes = await generarPdfLiquidacion(
+        {
+          torre: cargo.unidad.torre,
+          piso: cargo.unidad.piso,
+          depto: cargo.unidad.depto,
+          titular: cargo.unidad.titular,
+          m2: cargo.unidad.m2,
+        },
+        {
+          etiqueta: periodo.etiqueta,
+          fechaInicio: periodo.fechaInicio,
+          fechaFin: periodo.fechaFin,
+          vencimiento: periodo.vencimiento,
+        },
+        {
+          gastoComun: cargo.gastoComun,
+          cochera: cargo.cochera,
+          baulera: cargo.baulera,
+          quincho: cargo.quincho,
+          calefaccion: cargo.calefaccion,
+          total: cargo.total,
+          saldoAnterior: cargo.saldoAnterior,
+          totalPagado: cargo.totalPagado,
+          saldoActual: cargo.saldoActual,
+        }
+      );
+
+      const nombreArchivo = `expensa_${cargo.unidad.piso}${cargo.unidad.depto}_${periodo.etiqueta.replace(/\s+/g, "_")}.pdf`;
+
+      for (const email of emails) {
+        await enviarLiquidacionPorEmail({
+          to: email,
+          unidadLabel: label,
+          periodoEtiqueta: periodo.etiqueta,
+          vencimiento: periodo.vencimiento,
+          totalAPagar: cargo.saldoActual,
+          pdfBytes,
+          nombreArchivo,
+        });
+      }
+      enviados++;
+    }
+
+    return { ok: true, data: { enviados, sinEmail } };
+  } catch (e) {
+    console.error("[enviarLiquidacionesPorEmailAction] Error inesperado:", e);
+    const mensaje = e instanceof Error ? e.message : "";
+    return {
+      ok: false,
+      error: mensaje.startsWith("Falta configurar")
+        ? mensaje
+        : "No se pudieron enviar los emails por un error inesperado en el servidor. Probá de nuevo en un minuto; si se repite, revisá los logs de Vercel.",
+    };
   }
 }
 
