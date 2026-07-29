@@ -7,6 +7,18 @@ const badge: Record<string, string> = {
   CERRADO: "bg-green-100 text-green-700",
 };
 
+const categoriaLabel: Record<string, string> = {
+  RUIDO: "Ruido",
+  MANTENIMIENTO: "Mantenimiento",
+  SEGURIDAD: "Seguridad",
+  CONVIVENCIA: "Convivencia",
+  ASCENSOR: "Ascensor",
+  PLOMERIA: "Plomería",
+  ELECTRICIDAD: "Electricidad",
+  LIMPIEZA: "Limpieza",
+  OTRO: "Otro",
+};
+
 export default async function ReclamosAdminPage() {
   const reclamos = await prisma.reclamo.findMany({
     orderBy: { createdAt: "desc" },
@@ -23,6 +35,9 @@ export default async function ReclamosAdminPage() {
             <div className="flex items-center justify-between mb-2">
               <div>
                 <span className="font-semibold">{r.titulo}</span>{" "}
+                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                  {categoriaLabel[r.categoria] ?? r.categoria}
+                </span>{" "}
                 <span className="text-sm text-gray-500">
                   · {r.unidad.torre === "GRANDE" ? "TG" : "TC"} {r.unidad.piso}º{r.unidad.depto} · {r.usuario.nombre}
                 </span>
