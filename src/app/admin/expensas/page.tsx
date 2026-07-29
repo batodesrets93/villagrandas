@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import EliminarPeriodoButton from "@/components/EliminarPeriodoButton";
+import EnviarEmailsButton from "@/components/EnviarEmailsButton";
 
 function money(n: number) {
   return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2 });
@@ -49,6 +50,7 @@ export default async function ExpensasPage() {
                       <Link href={`/admin/expensas/${p.id}/editar`} className="text-brand-600 underline text-sm">
                         Editar
                       </Link>
+                      <EnviarEmailsButton periodoId={p.id} etiqueta={p.etiqueta} />
                       <EliminarPeriodoButton periodoId={p.id} etiqueta={p.etiqueta} />
                     </div>
                   </td>
