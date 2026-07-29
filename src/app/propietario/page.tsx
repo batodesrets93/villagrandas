@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import CambiarPasswordForm from "@/components/CambiarPasswordForm";
 
 function money(n: number) {
   return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2 });
@@ -95,6 +96,8 @@ export default async function PropietarioPage() {
           </tbody>
         </table>
       </div>
+
+      <CambiarPasswordForm />
     </div>
   );
 }
