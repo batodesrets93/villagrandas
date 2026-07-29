@@ -491,3 +491,42 @@ export async function responderReclamoAction(formData: FormData) {
     console.error("[responderReclamoAction] No se pudo enviar el email de notificación:", e);
   }
 }
+// ---------- CUENTA ----------
+
+export async function cambiarPasswordAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) return { ok: false, error: "No autorizado" };
+
+    const passwordActual = String(formData.get("passwordActual") || "");
+    const passwordNueva = String(formData.get("passwordNueva") || "");
+    const passwordNuevaRepetida = String(formData.get("passwordNuevaRepetida") || "");
+
+    if (!passwordActual || !passwordNueva || !passwordNuevaRepetida) {
+      return { ok: false, error: "Completá todos los campos." };
+    }
+    if (passwordNueva.length < 6) {
+      return { ok: false, error: "La contraseña nueva tiene que tener al menos 6 caracteres." };
+    }
+    if (passwordNueva !== passwordNuevaRepetida) {
+      return { ok: false, error: "Las contraseñas nuevas no coinciden." };
+    }
+
+    const usuario = await prisma.usuario.findUniqueOrThrow({ where: { id: session.user.id } });
+    const valido = await bcrypt.compare(passwordActual, usuario.passwordHash);
+    if (!valido) {
+      return { ok: false, error: "La contraseña actual no es correcta." };
+    }
+
+    const nuevoHash = await bcrypt.hash(passwordNueva, 10);
+    await prisma.usuario.update({
+      where: { id: usuario.id },
+      data: { passwordHash: nuevoHash },
+    });
+
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[cambiarPasswordAction] Error inesperado:", e);
+    return { ok: false, error: "No se pudo cambiar la contraseña por un error inesperado. Probá de nuevo en un minuto." };
+  }
+}
