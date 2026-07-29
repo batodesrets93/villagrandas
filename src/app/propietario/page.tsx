@@ -14,7 +14,7 @@ export default async function PropietarioPage() {
 
   const cargos = await prisma.cargoUnidadPeriodo.findMany({
     where: { unidadId: unidad.id },
-    include: { periodo: true },
+    include: { periodo: true, pagos: { orderBy: { fecha: "desc" } } },
     orderBy: { periodo: { fechaInicio: "desc" } },
   });
 
@@ -56,7 +56,27 @@ export default async function PropietarioPage() {
                 <td>{c.periodo.etiqueta}</td>
                 <td>{c.periodo.vencimiento.toLocaleDateString("es-AR")}</td>
                 <td>{money(c.total)}</td>
-                <td>{money(c.totalPagado)}</td>
+                <td>
+                  {money(c.totalPagado)}
+                  {c.pagos.length > 0 && (
+                    <details className="mt-1">
+                      <summary className="cursor-pointer text-xs text-brand-600 underline">
+                        {c.pagos.length === 1 ? "1 pago" : `${c.pagos.length} pagos`}
+                      </summary>
+                      <table className="mt-1">
+                        <tbody>
+                          {c.pagos.map((p) => (
+                            <tr key={p.id}>
+                              <td className="whitespace-nowrap">{p.fecha.toLocaleDateString("es-AR")}</td>
+                              <td className="text-right">{money(p.monto)}</td>
+                              <td className="text-gray-500">{p.medio || "-"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </details>
+                  )}
+                </td>
                 <td className={c.saldoActual > 0 ? "text-red-600 font-medium" : ""}>{money(c.saldoActual)}</td>
                 <td>
                   <a href={`/api/pdf/${c.id}`} className="text-brand-600 underline text-sm">
