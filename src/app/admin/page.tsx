@@ -79,11 +79,11 @@ export default async function AdminDashboard() {
                       </span>
                     </td>
                     <td>
-                      <div className="font-semibold">
+                      <div className="font-semibold">{d.titular}</div>
+                      <div className="text-xs text-gray-500">
                         {d.torre === "GRANDE" ? "Torre Grande" : "Torre Chica"} · {d.piso}
                         {d.depto}
                       </div>
-                      <div className="text-xs text-gray-500">{d.titular}</div>
                       <div className="w-full h-1 bg-gray-100 rounded mt-1 overflow-hidden">
                         <div
                           className="h-full bg-red-700 rounded"
