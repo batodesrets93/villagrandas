@@ -26,6 +26,31 @@ function getTransporter(): Transporter {
   return transporter;
 }
 
+export async function enviarRespuestaReclamoPorEmail(opts: {
+  to: string;
+  titulo: string;
+  respuesta: string;
+  cerrado: boolean;
+}) {
+  const t = getTransporter();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
+
+  await t.sendMail({
+    from,
+    to: opts.to,
+    subject: `Torres Villa Grandas - Respuesta a tu reclamo: ${opts.titulo}`,
+    text:
+      `Hola,\n\n` +
+      `Administración respondió tu reclamo "${opts.titulo}":\n\n` +
+      `${opts.respuesta}\n\n` +
+      (opts.cerrado
+        ? `Este reclamo quedó marcado como cerrado.\n\n`
+        : `Podés ver el estado del reclamo ingresando a tu cuenta.\n\n`) +
+      `Administración Torres Villa Grandas\n` +
+      `Administración Joaquín Rigueiro · Cel. 223 5919009`,
+  });
+}
+
 function money(n: number) {
   return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
