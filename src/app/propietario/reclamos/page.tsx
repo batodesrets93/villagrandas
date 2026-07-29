@@ -9,6 +9,18 @@ const badge: Record<string, string> = {
   CERRADO: "bg-green-100 text-green-700",
 };
 
+const categoriaLabel: Record<string, string> = {
+  RUIDO: "Ruido",
+  MANTENIMIENTO: "Mantenimiento",
+  SEGURIDAD: "Seguridad",
+  CONVIVENCIA: "Convivencia",
+  ASCENSOR: "Ascensor",
+  PLOMERIA: "Plomería",
+  ELECTRICIDAD: "Electricidad",
+  LIMPIEZA: "Limpieza",
+  OTRO: "Otro",
+};
+
 export default async function ReclamosPropietarioPage() {
   const session = await getServerSession(authOptions);
   const reclamos = await prisma.reclamo.findMany({
@@ -26,7 +38,12 @@ export default async function ReclamosPropietarioPage() {
         {reclamos.map((r) => (
           <div key={r.id} className="card">
             <div className="flex items-center justify-between mb-2">
-              <span className="font-semibold">{r.titulo}</span>
+              <span>
+                <span className="font-semibold">{r.titulo}</span>{" "}
+                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                  {categoriaLabel[r.categoria] ?? r.categoria}
+                </span>
+              </span>
               <span className={`text-xs px-2 py-1 rounded-full ${badge[r.estado]}`}>{r.estado}</span>
             </div>
             <p className="text-sm text-gray-700 mb-2">{r.descripcion}</p>
