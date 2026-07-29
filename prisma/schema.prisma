@@ -47,16 +47,17 @@ model Usuario {
 }
 
 model Unidad {
-  id           String   @id @default(cuid())
-  torre        Torre
-  piso         String
-  depto        String
-  titular      String
-  ambientes    String
-  m2           Float
-  coeficiente  Float
-  cocheraMonto Float    @default(0)
-  bauleraMonto Float    @default(0)
+  id              String   @id @default(cuid())
+  torre           Torre
+  piso            String
+  depto           String
+  titular         String
+  ambientes       String
+  m2              Float
+  coeficiente     Float
+  cocheraMonto    Float    @default(0)
+  bauleraMonto    Float    @default(0)
+  esDesarrollador Boolean  @default(false)
 
   usuarios     Usuario[]
   cargos       CargoUnidadPeriodo[]
