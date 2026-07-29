@@ -5,6 +5,22 @@ const prisma = new PrismaClient();
 
 // Datos reales tomados de "EXPENSAS TORRES VILLA GRANDAS - Junio 2026"
 // coeficiente esta guardado como fraccion (0.0189484 = 1,89484%)
+//
+// cochera/baulera abajo son los MONTOS que le tocaron a cada unidad en la
+// liquidacion de junio 2026 (no son m2, son el resultado ya calculado). En
+// esa liquidacion, el excel calcula esos montos con la misma logica que el
+// gasto comun: coeficiente_cochera = m2_cochera / m2TotalEdificio, monto =
+// coeficiente_cochera * totalGastosDelPeriodo. Como m2TotalEdificio y el
+// totalGastos de junio son conocidos, se puede despejar el m2 real de cada
+// cochera/baulera a partir de ese monto: m2 = monto * (m2TotalEdificio /
+// totalGastosJunio). Eso es lo que hace FACTOR_MONTO_A_M2 mas abajo, y es
+// lo que permite cargar cocheraM2/bauleraM2 reales (no un monto fijo) para
+// que la app calcule cochera/baulera dinamicamente en cada periodo, igual
+// que hace con el gasto comun.
+const M2_TOTAL_EDIFICIO_JUNIO = 7899.01 + 1476.22 + 314.53; // deptos + cocheras + baulera
+const TOTAL_GASTOS_JUNIO_2026 = 36293697.34;
+const FACTOR_MONTO_A_M2 = M2_TOTAL_EDIFICIO_JUNIO / TOTAL_GASTOS_JUNIO_2026;
+
 type UnidadSeed = {
   torre: Torre;
   piso: string;
@@ -125,7 +141,10 @@ async function main() {
   for (const u of todas) {
     await prisma.unidad.upsert({
       where: { torre_piso_depto: { torre: u.torre, piso: u.piso, depto: u.depto } },
-      update: {},
+      update: {
+        cocheraM2: (u.cochera ?? 0) * FACTOR_MONTO_A_M2,
+        bauleraM2: (u.baulera ?? 0) * FACTOR_MONTO_A_M2,
+      },
       create: {
         torre: u.torre,
         piso: u.piso,
@@ -134,8 +153,8 @@ async function main() {
         ambientes: u.ambientes,
         m2: u.m2,
         coeficiente: u.coeficiente,
-        cocheraMonto: u.cochera ?? 0,
-        bauleraMonto: u.baulera ?? 0,
+        cocheraM2: (u.cochera ?? 0) * FACTOR_MONTO_A_M2,
+        bauleraM2: (u.baulera ?? 0) * FACTOR_MONTO_A_M2,
       },
     });
   }
