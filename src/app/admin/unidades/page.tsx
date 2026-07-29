@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { crearAccesoPropietarioAction } from "@/lib/actions";
+import DesarrolladorToggle from "./DesarrolladorToggle";
 
 function money(n: number) {
   return n ? "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2 }) : "-";
@@ -16,7 +17,9 @@ export default async function UnidadesPage() {
       <h1 className="text-2xl font-bold text-brand-700">Unidades</h1>
       <p className="text-sm text-gray-600">
         79 unidades cargadas (Torre Grande: 57 · Torre Chica: 22). Asigná un email y contraseña a cada propietario
-        para que pueda entrar a ver su cuenta corriente, reservar quincho y hacer reclamos.
+        para que pueda entrar a ver su cuenta corriente, reservar quincho y hacer reclamos. Tildá &quot;Edificio&quot;
+        en las unidades que son del desarrollador (no de un propietario real): quedan excluidas del ranking de
+        deudores del dashboard.
       </p>
 
       <div className="card overflow-x-auto">
@@ -30,6 +33,7 @@ export default async function UnidadesPage() {
               <th>m²</th>
               <th>Cochera</th>
               <th>Baulera</th>
+              <th title="No aparece en el ranking de deudores del dashboard">Edificio</th>
               <th>Acceso</th>
             </tr>
           </thead>
@@ -43,6 +47,9 @@ export default async function UnidadesPage() {
                 <td>{u.m2}</td>
                 <td>{money(u.cocheraMonto)}</td>
                 <td>{money(u.bauleraMonto)}</td>
+                <td>
+                  <DesarrolladorToggle unidadId={u.id} checked={u.esDesarrollador} />
+                </td>
                 <td>
                   {u.usuarios.length > 0 ? (
                     <span className="text-brand-600 font-medium">{u.usuarios[0].email}</span>
