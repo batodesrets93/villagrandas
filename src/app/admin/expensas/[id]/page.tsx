@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { registrarPagoAction, actualizarCalefaccionAction } from "@/lib/actions";
+import EnviarEmailsButton from "@/components/EnviarEmailsButton";
 
 function money(n: number) {
   return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2 });
@@ -16,12 +17,15 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-brand-700">{periodo.etiqueta}</h1>
-        <p className="text-sm text-gray-500">
-          {periodo.fechaInicio.toLocaleDateString("es-AR")} al {periodo.fechaFin.toLocaleDateString("es-AR")} · Vence{" "}
-          {periodo.vencimiento.toLocaleDateString("es-AR")}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-brand-700">{periodo.etiqueta}</h1>
+          <p className="text-sm text-gray-500">
+            {periodo.fechaInicio.toLocaleDateString("es-AR")} al {periodo.fechaFin.toLocaleDateString("es-AR")} · Vence{" "}
+            {periodo.vencimiento.toLocaleDateString("es-AR")}
+          </p>
+        </div>
+        <EnviarEmailsButton periodoId={periodo.id} etiqueta={periodo.etiqueta} />
       </div>
 
       <div className="card">
@@ -92,6 +96,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                   <a href={`/api/pdf/${c.id}`} className="text-brand-600 underline text-xs block">
                     Descargar PDF
                   </a>
+                  <EnviarEmailsButton periodoId={periodo.id} etiqueta={periodo.etiqueta} cargoId={c.id} />
                   <details>
                     <summary className="cursor-pointer text-xs text-gray-500">Registrar pago</summary>
                     <form action={registrarPagoAction} className="mt-1 space-y-1 w-36">
