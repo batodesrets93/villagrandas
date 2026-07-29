@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import * as XLSX from "xlsx";
 import { crearAccesoPropietarioAction } from "@/lib/actions";
 import DesarrolladorToggle from "./DesarrolladorToggle";
@@ -110,6 +111,7 @@ export default function UnidadesTable({ unidades }: { unidades: UnidadRow[] }) {
               <th>Baulera</th>
               <th title="No aparece en el ranking de deudores del dashboard">Edificio</th>
               <th>Acceso</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -143,11 +145,16 @@ export default function UnidadesTable({ unidades }: { unidades: UnidadRow[] }) {
                     </details>
                   )}
                 </td>
+                <td>
+                  <Link href={`/admin/unidades/${u.id}`} className="text-brand-600 underline text-sm whitespace-nowrap">
+                    Ver historial
+                  </Link>
+                </td>
               </tr>
             ))}
             {filtradas.length === 0 && (
               <tr>
-                <td colSpan={9} className="text-center text-gray-500 py-6">
+                <td colSpan={10} className="text-center text-gray-500 py-6">
                   No se encontraron unidades para &quot;{busqueda}&quot;.
                 </td>
               </tr>
