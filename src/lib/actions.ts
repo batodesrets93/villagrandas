@@ -247,6 +247,20 @@ export async function crearAccesoPropietarioAction(formData: FormData) {
   revalidatePath("/admin/unidades");
 }
 
+export async function marcarDesarrolladorAction(formData: FormData) {
+  await requireAdmin();
+  const unidadId = String(formData.get("unidadId"));
+  const esDesarrollador = formData.get("esDesarrollador") === "on";
+
+  await prisma.unidad.update({
+    where: { id: unidadId },
+    data: { esDesarrollador },
+  });
+
+  revalidatePath("/admin/unidades");
+  revalidatePath("/admin");
+}
+
 // ---------- RESERVAS (propietario y admin) ----------
 
 export async function crearReservaAction(formData: FormData): Promise<ResultadoAccion> {
