@@ -33,6 +33,18 @@ enum EstadoReclamo {
   CERRADO
 }
 
+enum CategoriaReclamo {
+  RUIDO
+  MANTENIMIENTO
+  SEGURIDAD
+  CONVIVENCIA
+  ASCENSOR
+  PLOMERIA
+  ELECTRICIDAD
+  LIMPIEZA
+  OTRO
+}
+
 model Usuario {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -159,6 +171,7 @@ model Reclamo {
   usuario      Usuario       @relation(fields: [usuarioId], references: [id])
   titulo       String
   descripcion  String
+  categoria    CategoriaReclamo @default(OTRO)
   estado       EstadoReclamo @default(ABIERTO)
   respuesta    String?
   createdAt    DateTime      @default(now())
