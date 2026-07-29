@@ -11,8 +11,10 @@ type CategoriaInput = {
 
 /**
  * Crea un período de expensas y calcula automáticamente el cargo de cada
- * unidad: gasto común (prorrateado por coeficiente), cochera/baulera fijas,
- * quincho (reservas confirmadas y no facturadas todavia) y arrastra el saldo
+ * unidad: gasto común (prorrateado por coeficiente), cochera y baulera
+ * (prorrateadas por su propio m2 sobre el m2 total del edificio, con la
+ * misma lógica y la misma bolsa de gastos que el gasto común), quincho
+ * (reservas confirmadas y no facturadas todavia) y arrastra el saldo
  * anterior de la última liquidación de cada unidad.
  *
  * IMPORTANTE: con 79 unidades, hacer una consulta a la base POR UNIDAD (como
@@ -63,11 +65,21 @@ export async function crearPeriodoYCalcular(params: {
   }
 
   // 2) Calcular todo en memoria (rapido, no toca la base).
+  // m2 total del edificio = deptos + cocheras + baulera juntos. Cochera y
+  // baulera se prorratean con este total (no con el m2 de los deptos solo),
+  // exactamente igual que en el Excel de expensas.
+  const totalM2Edificio = unidades.reduce(
+    (acc, u) => acc + u.m2 + u.cocheraM2 + u.bauleraM2,
+    0
+  );
+
   const cargosData = unidades.map((unidad) => {
     const saldoAnterior = saldoAnteriorPorUnidad.get(unidad.id) ?? 0;
     const gastoComun = totalGastos * unidad.coeficiente;
-    const cochera = unidad.cocheraMonto;
-    const baulera = unidad.bauleraMonto;
+    const coeficienteCochera = totalM2Edificio > 0 ? unidad.cocheraM2 / totalM2Edificio : 0;
+    const coeficienteBaulera = totalM2Edificio > 0 ? unidad.bauleraM2 / totalM2Edificio : 0;
+    const cochera = totalGastos * coeficienteCochera;
+    const baulera = totalGastos * coeficienteBaulera;
     const reservaIds = quinchoPorUnidad.get(unidad.id) ?? [];
     const quincho = reservaIds.length * MONTO_QUINCHO;
     const calefaccion = 0; // se completa a mano despues, es por consumo
@@ -175,9 +187,10 @@ export async function actualizarCalefaccion(cargoId: string, calefaccion: number
 
 /**
  * Recalcula un período YA EXISTENTE con nuevas categorías de gasto, en vez
- * de crear uno nuevo. Se mantienen intactos: cochera, baulera, quincho,
- * calefacción, saldo anterior y los pagos ya registrados de cada unidad;
- * solo se vuelve a calcular el gasto común y los totales.
+ * de crear uno nuevo. Gasto común, cochera y baulera se vuelven a calcular
+ * con el nuevo total de gastos (las tres se prorratean con el mismo total).
+ * Se mantienen intactos: quincho, calefacción, saldo anterior y los pagos
+ * ya registrados de cada unidad.
  */
 export async function actualizarPeriodoYCalcular(
   periodoId: string,
@@ -213,15 +226,30 @@ export async function actualizarPeriodoYCalcular(
     })),
   });
 
-  // Recalcula el gasto común y el total de las 79 unidades en UNA sola
-  // consulta SQL (en vez de una actualización por unidad), para no repetir
-  // el problema de lentitud que causaba el timeout al crear un período.
+  // m2 total del edificio (deptos + cocheras + baulera), igual criterio que
+  // en crearPeriodoYCalcular, para poder prorratear cochera/baulera.
+  const agregadoM2 = await prisma.unidad.aggregate({
+    _sum: { m2: true, cocheraM2: true, bauleraM2: true },
+  });
+  const totalM2Edificio =
+    (agregadoM2._sum.m2 ?? 0) +
+    (agregadoM2._sum.cocheraM2 ?? 0) +
+    (agregadoM2._sum.bauleraM2 ?? 0);
+  // Evitar división por cero si todavia no hay unidades cargadas.
+  const gastoPorM2 = totalM2Edificio > 0 ? totalGastos / totalM2Edificio : 0;
+
+  // Recalcula gasto común, cochera, baulera y el total de las 79 unidades en
+  // UNA sola consulta SQL (en vez de una actualización por unidad), para no
+  // repetir el problema de lentitud que causaba el timeout al crear un
+  // período.
   await prisma.$executeRaw`
     UPDATE "CargoUnidadPeriodo" AS c
     SET
       "gastoComun" = ${totalGastos} * u."coeficiente",
-      "total" = (${totalGastos} * u."coeficiente") + c."cochera" + c."baulera" + c."quincho" + c."calefaccion",
-      "saldoActual" = ((${totalGastos} * u."coeficiente") + c."cochera" + c."baulera" + c."quincho" + c."calefaccion")
+      "cochera" = ${gastoPorM2} * u."cocheraM2",
+      "baulera" = ${gastoPorM2} * u."bauleraM2",
+      "total" = (${totalGastos} * u."coeficiente") + (${gastoPorM2} * u."cocheraM2") + (${gastoPorM2} * u."bauleraM2") + c."quincho" + c."calefaccion",
+      "saldoActual" = ((${totalGastos} * u."coeficiente") + (${gastoPorM2} * u."cocheraM2") + (${gastoPorM2} * u."bauleraM2") + c."quincho" + c."calefaccion")
                        + c."saldoAnterior" - c."totalPagado"
     FROM "Unidad" AS u
     WHERE c."unidadId" = u."id" AND c."periodoId" = ${periodoId}
