@@ -5,9 +5,10 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { CategoriaReclamo } from "@prisma/client";
 import { crearPeriodoYCalcular, actualizarPeriodoYCalcular, registrarPago, actualizarCalefaccion, MONTO_QUINCHO } from "@/lib/calculo";
 import { generarPdfLiquidacion } from "@/lib/pdf";
-import { enviarLiquidacionPorEmail } from "@/lib/email";
+import { enviarLiquidacionPorEmail, enviarRespuestaReclamoPorEmail } from "@/lib/email";
 
 /**
  * Interpreta un monto escrito a mano, aceptando cualquiera de estas formas:
@@ -434,14 +435,19 @@ export async function crearReclamoAction(formData: FormData): Promise<ResultadoA
     const session = await requirePropietario();
     const titulo = String(formData.get("titulo"));
     const descripcion = String(formData.get("descripcion"));
+    const categoriaRaw = String(formData.get("categoria") || "OTRO");
     if (!titulo.trim() || !descripcion.trim()) {
       return { ok: false, error: "Completá título y descripción." };
     }
+    const categoria = Object.values(CategoriaReclamo).includes(categoriaRaw as CategoriaReclamo)
+      ? (categoriaRaw as CategoriaReclamo)
+      : CategoriaReclamo.OTRO;
 
     await prisma.reclamo.create({
       data: {
         titulo,
         descripcion,
+        categoria,
         unidadId: session.user.unidadId!,
         usuarioId: session.user.id,
       },
@@ -461,14 +467,27 @@ export async function responderReclamoAction(formData: FormData) {
   const respuesta = String(formData.get("respuesta"));
   const cerrar = formData.get("cerrar") === "on";
 
-  await prisma.reclamo.update({
+  const reclamo = await prisma.reclamo.update({
     where: { id: reclamoId },
     data: {
       respuesta,
       respondidoAt: new Date(),
       estado: cerrar ? "CERRADO" : "RESPONDIDO",
     },
+    include: { usuario: true },
   });
   revalidatePath("/admin/reclamos");
   revalidatePath("/propietario/reclamos");
+
+  try {
+    await enviarRespuestaReclamoPorEmail({
+      to: reclamo.usuario.email,
+      titulo: reclamo.titulo,
+      respuesta,
+      cerrado: cerrar,
+    });
+  } catch (e) {
+    // No bloqueamos la respuesta del reclamo si falla el envío del email.
+    console.error("[responderReclamoAction] No se pudo enviar el email de notificación:", e);
+  }
 }
