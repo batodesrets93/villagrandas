@@ -1,0 +1,23 @@
+{
+  "name": "Torres Villa Grandas - Administración",
+  "short_name": "Villa Grandas",
+  "description": "Sistema de administración de expensas, quinchos y reclamos",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#b4ada4",
+  "theme_color": "#b4ada4",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
