@@ -5,6 +5,7 @@ export default function NavAdmin() {
   const links = [
     { href: "/admin", label: "Panel" },
     { href: "/admin/unidades", label: "Unidades" },
+    { href: "/admin/cocheras-bauleras", label: "Cocheras y bauleras" },
     { href: "/admin/expensas", label: "Expensas" },
     { href: "/admin/reservas", label: "Reservas" },
     { href: "/admin/reclamos", label: "Reclamos" },
