@@ -18,6 +18,12 @@ export async function GET(_req: NextRequest, { params }: { params: { cargoId: st
   const esAdmin = session.user.rol === "ADMIN";
   if (!esDueño && !esAdmin) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
 
+  const agregadoM2 = await prisma.unidad.aggregate({
+    _sum: { m2: true, cocheraM2: true, bauleraM2: true },
+  });
+  const totalM2Edificio =
+    (agregadoM2._sum.m2 ?? 0) + (agregadoM2._sum.cocheraM2 ?? 0) + (agregadoM2._sum.bauleraM2 ?? 0);
+
   const bytes = await generarPdfLiquidacion(
     {
       torre: cargo.unidad.torre,
@@ -25,6 +31,8 @@ export async function GET(_req: NextRequest, { params }: { params: { cargoId: st
       depto: cargo.unidad.depto,
       titular: cargo.unidad.titular,
       m2: cargo.unidad.m2,
+      cocheraM2: cargo.unidad.cocheraM2,
+      bauleraM2: cargo.unidad.bauleraM2,
     },
     {
       etiqueta: cargo.periodo.etiqueta,
@@ -42,7 +50,8 @@ export async function GET(_req: NextRequest, { params }: { params: { cargoId: st
       saldoAnterior: cargo.saldoAnterior,
       totalPagado: cargo.totalPagado,
       saldoActual: cargo.saldoActual,
-    }
+    },
+    totalM2Edificio
   );
 
   const nombreArchivo = `expensa_${cargo.unidad.piso}${cargo.unidad.depto}_${cargo.periodo.etiqueta.replace(/\s+/g, "_")}.pdf`;
