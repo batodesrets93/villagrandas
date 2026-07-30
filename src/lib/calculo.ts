@@ -9,15 +9,125 @@ type CategoriaInput = {
   esFondoReserva?: boolean;
 };
 
+type CargoComplementarioIndividual = {
+  id: string;
+  monto: number;
+  unidadCobradaId: string;
+};
+
+/**
+ * Trae cocheras y bauleras (cada una es su propia unidad complementaria,
+ * con su propio m2) y calcula, para el total de gastos de un período:
+ *
+ * - el m2 total REAL del edificio: deptos + TODAS las cocheras + TODAS las
+ *   bauleras, tengan o no propietario asignado (antes, el m2 de las que no
+ *   tenían dueño no se contaba en ningún lado, y directamente no se
+ *   cobraban).
+ * - la liquidación individual de cada cochera y cada baulera (monto = su
+ *   m2 * gasto por m2 del edificio), igual que en las pestañas COCHERAS y
+ *   BAULERAS del excel.
+ * - a qué unidad se le cobra cada una: a su propietario si tiene uno
+ *   asignado, o a la unidad marcada como "esConsolidadaCocheraBaulera"
+ *   (hoy, la cuenta consolidada de Costa Tranvial) si todavía no se
+ *   asignó.
+ */
+async function calcularComplementarios(totalGastos: number) {
+  const [unidades, cocheras, bauleras] = await Promise.all([
+    prisma.unidad.findMany({ select: { id: true, m2: true, esConsolidadaCocheraBaulera: true } }),
+    prisma.cochera.findMany({ select: { id: true, m2: true, unidadId: true } }),
+    prisma.baulera.findMany({ select: { id: true, m2: true, unidadId: true } }),
+  ]);
+
+  const consolidada = unidades.find((u) => u.esConsolidadaCocheraBaulera);
+  if (!consolidada) {
+    throw new Error(
+      "No existe la unidad 'consolidada' para cocheras/bauleras sin asignar " +
+        "(esConsolidadaCocheraBaulera = true). Correr el seed antes de generar el período."
+    );
+  }
+
+  const totalM2Unidades = unidades.reduce((acc, u) => acc + u.m2, 0);
+  const totalM2Cocheras = cocheras.reduce((acc, c) => acc + c.m2, 0);
+  const totalM2Bauleras = bauleras.reduce((acc, b) => acc + b.m2, 0);
+  const totalM2Edificio = totalM2Unidades + totalM2Cocheras + totalM2Bauleras;
+  const montoPorM2 = totalM2Edificio > 0 ? totalGastos / totalM2Edificio : 0;
+
+  const cocherasIndividuales: CargoComplementarioIndividual[] = cocheras.map((c) => ({
+    id: c.id,
+    monto: montoPorM2 * c.m2,
+    unidadCobradaId: c.unidadId ?? consolidada.id,
+  }));
+  const baulerasIndividuales: CargoComplementarioIndividual[] = bauleras.map((b) => ({
+    id: b.id,
+    monto: montoPorM2 * b.m2,
+    unidadCobradaId: b.unidadId ?? consolidada.id,
+  }));
+
+  const cocheraPorUnidad = new Map<string, number>();
+  for (const c of cocherasIndividuales) {
+    cocheraPorUnidad.set(c.unidadCobradaId, (cocheraPorUnidad.get(c.unidadCobradaId) ?? 0) + c.monto);
+  }
+  const bauleraPorUnidad = new Map<string, number>();
+  for (const b of baulerasIndividuales) {
+    bauleraPorUnidad.set(b.unidadCobradaId, (bauleraPorUnidad.get(b.unidadCobradaId) ?? 0) + b.monto);
+  }
+
+  return {
+    totalM2Edificio,
+    montoPorM2,
+    cocheraPorUnidad,
+    bauleraPorUnidad,
+    cocherasIndividuales,
+    baulerasIndividuales,
+  };
+}
+
+/** m2 total del edificio (deptos + TODAS las cocheras + TODAS las bauleras). Para PDFs y pantallas que solo necesitan mostrar el % de incidencia. */
+export async function calcularTotalM2Edificio(): Promise<number> {
+  const [unidadAgg, cocheraAgg, bauleraAgg] = await Promise.all([
+    prisma.unidad.aggregate({ _sum: { m2: true } }),
+    prisma.cochera.aggregate({ _sum: { m2: true } }),
+    prisma.baulera.aggregate({ _sum: { m2: true } }),
+  ]);
+  return (unidadAgg._sum.m2 ?? 0) + (cocheraAgg._sum.m2 ?? 0) + (bauleraAgg._sum.m2 ?? 0);
+}
+
+/**
+ * m2 de cochera/baulera asignados a cada unidad (para mostrar en pantallas
+ * y PDFs "Cochera: X m² + Baulera: Y m²"). Devuelve un Map por unidadId;
+ * las unidades sin espacios asignados simplemente no aparecen (usar ?? 0).
+ */
+export async function agruparM2ComplementariosPorUnidad(): Promise<
+  Map<string, { cocheraM2: number; bauleraM2: number }>
+> {
+  const [cocheras, bauleras] = await Promise.all([
+    prisma.cochera.findMany({ where: { unidadId: { not: null } }, select: { unidadId: true, m2: true } }),
+    prisma.baulera.findMany({ where: { unidadId: { not: null } }, select: { unidadId: true, m2: true } }),
+  ]);
+  const mapa = new Map<string, { cocheraM2: number; bauleraM2: number }>();
+  for (const c of cocheras) {
+    const actual = mapa.get(c.unidadId!) ?? { cocheraM2: 0, bauleraM2: 0 };
+    actual.cocheraM2 += c.m2;
+    mapa.set(c.unidadId!, actual);
+  }
+  for (const b of bauleras) {
+    const actual = mapa.get(b.unidadId!) ?? { cocheraM2: 0, bauleraM2: 0 };
+    actual.bauleraM2 += b.m2;
+    mapa.set(b.unidadId!, actual);
+  }
+  return mapa;
+}
+
 /**
  * Crea un período de expensas y calcula automáticamente el cargo de cada
  * unidad: gasto común (prorrateado por coeficiente), cochera y baulera
- * (prorrateadas por su propio m2 sobre el m2 total del edificio, con la
- * misma lógica y la misma bolsa de gastos que el gasto común), quincho
+ * (cada cochera y cada baulera se liquida individualmente por su propio
+ * m2 sobre el m2 total del edificio, y se suma a quien la tenga asignada;
+ * las que no tienen dueño se cargan a la cuenta consolidada), quincho
  * (reservas confirmadas y no facturadas todavia) y arrastra el saldo
  * anterior de la última liquidación de cada unidad.
  *
- * IMPORTANTE: con 79 unidades, hacer una consulta a la base POR UNIDAD (como
+ * IMPORTANTE: con ~80 unidades, hacer una consulta a la base POR UNIDAD (como
  * en la version anterior) significa mas de 150 idas y vueltas secuenciales a
  * la base, lo que puede superar el tiempo maximo que Vercel le da a una
  * accion de servidor. Por eso aca se resuelve todo con un puñado de
@@ -38,6 +148,9 @@ export async function crearPeriodoYCalcular(params: {
   const unidades = await prisma.unidad.findMany({
     orderBy: [{ torre: "asc" }, { piso: "asc" }, { depto: "asc" }],
   });
+
+  const { cocheraPorUnidad, bauleraPorUnidad, cocherasIndividuales, baulerasIndividuales } =
+    await calcularComplementarios(totalGastos);
 
   const reservasPendientes = await prisma.reserva.findMany({
     where: { estado: "CONFIRMADA", cargoId: null },
@@ -65,21 +178,11 @@ export async function crearPeriodoYCalcular(params: {
   }
 
   // 2) Calcular todo en memoria (rapido, no toca la base).
-  // m2 total del edificio = deptos + cocheras + baulera juntos. Cochera y
-  // baulera se prorratean con este total (no con el m2 de los deptos solo),
-  // exactamente igual que en el Excel de expensas.
-  const totalM2Edificio = unidades.reduce(
-    (acc, u) => acc + u.m2 + u.cocheraM2 + u.bauleraM2,
-    0
-  );
-
   const cargosData = unidades.map((unidad) => {
     const saldoAnterior = saldoAnteriorPorUnidad.get(unidad.id) ?? 0;
     const gastoComun = totalGastos * unidad.coeficiente;
-    const coeficienteCochera = totalM2Edificio > 0 ? unidad.cocheraM2 / totalM2Edificio : 0;
-    const coeficienteBaulera = totalM2Edificio > 0 ? unidad.bauleraM2 / totalM2Edificio : 0;
-    const cochera = totalGastos * coeficienteCochera;
-    const baulera = totalGastos * coeficienteBaulera;
+    const cochera = cocheraPorUnidad.get(unidad.id) ?? 0;
+    const baulera = bauleraPorUnidad.get(unidad.id) ?? 0;
     const reservaIds = quinchoPorUnidad.get(unidad.id) ?? [];
     const quincho = reservaIds.length * MONTO_QUINCHO;
     const calefaccion = 0; // se completa a mano despues, es por consumo
@@ -124,7 +227,8 @@ export async function crearPeriodoYCalcular(params: {
         },
       });
 
-      // Una sola consulta para insertar los 79 cargos, en vez de 79 consultas.
+      // Una sola consulta para insertar los cargos por unidad, en vez de una
+      // consulta por unidad.
       await tx.cargoUnidadPeriodo.createMany({
         data: cargosData.map((c) => ({
           id: c.id,
@@ -141,6 +245,30 @@ export async function crearPeriodoYCalcular(params: {
           saldoActual: c.saldoActual,
         })),
       });
+
+      // Liquidación individual de cada cochera y cada baulera, para poder
+      // ver/exportar despues cuánto le tocó pagar a cada espacio (y a quién
+      // se le cobró, aunque después se reasigne).
+      if (cocherasIndividuales.length > 0) {
+        await tx.cargoCocheraPeriodo.createMany({
+          data: cocherasIndividuales.map((c) => ({
+            periodoId: periodo.id,
+            cocheraId: c.id,
+            unidadCobradaId: c.unidadCobradaId,
+            monto: c.monto,
+          })),
+        });
+      }
+      if (baulerasIndividuales.length > 0) {
+        await tx.cargoBauleraPeriodo.createMany({
+          data: baulerasIndividuales.map((b) => ({
+            periodoId: periodo.id,
+            bauleraId: b.id,
+            unidadCobradaId: b.unidadCobradaId,
+            monto: b.monto,
+          })),
+        });
+      }
 
       // Vincular las reservas de quincho ya facturadas con su cargo (solo
       // las unidades que efectivamente tenian reservas pendientes).
@@ -188,9 +316,10 @@ export async function actualizarCalefaccion(cargoId: string, calefaccion: number
 /**
  * Recalcula un período YA EXISTENTE con nuevas categorías de gasto, en vez
  * de crear uno nuevo. Gasto común, cochera y baulera se vuelven a calcular
- * con el nuevo total de gastos (las tres se prorratean con el mismo total).
- * Se mantienen intactos: quincho, calefacción, saldo anterior y los pagos
- * ya registrados de cada unidad.
+ * con el nuevo total de gastos (las tres se prorratean con el mismo total,
+ * y cochera/baulera se recalculan espacio por espacio). Se mantienen
+ * intactos: quincho, calefacción, saldo anterior y los pagos ya
+ * registrados de cada unidad.
  */
 export async function actualizarPeriodoYCalcular(
   periodoId: string,
@@ -253,32 +382,59 @@ export async function actualizarPeriodoYCalcular(
     await prisma.gastoCategoria.deleteMany({ where: { id: { in: idsAEliminar } } });
   }
 
-  // m2 total del edificio (deptos + cocheras + baulera), igual criterio que
-  // en crearPeriodoYCalcular, para poder prorratear cochera/baulera.
-  const agregadoM2 = await prisma.unidad.aggregate({
-    _sum: { m2: true, cocheraM2: true, bauleraM2: true },
-  });
-  const totalM2Edificio =
-    (agregadoM2._sum.m2 ?? 0) +
-    (agregadoM2._sum.cocheraM2 ?? 0) +
-    (agregadoM2._sum.bauleraM2 ?? 0);
-  // Evitar división por cero si todavia no hay unidades cargadas.
-  const gastoPorM2 = totalM2Edificio > 0 ? totalGastos / totalM2Edificio : 0;
+  const { cocheraPorUnidad, bauleraPorUnidad, cocherasIndividuales, baulerasIndividuales } =
+    await calcularComplementarios(totalGastos);
 
-  // Recalcula gasto común, cochera, baulera y el total de las 79 unidades en
-  // UNA sola consulta SQL (en vez de una actualización por unidad), para no
-  // repetir el problema de lentitud que causaba el timeout al crear un
-  // período.
-  await prisma.$executeRaw`
-    UPDATE "CargoUnidadPeriodo" AS c
-    SET
-      "gastoComun" = ${totalGastos} * u."coeficiente",
-      "cochera" = ${gastoPorM2} * u."cocheraM2",
-      "baulera" = ${gastoPorM2} * u."bauleraM2",
-      "total" = (${totalGastos} * u."coeficiente") + (${gastoPorM2} * u."cocheraM2") + (${gastoPorM2} * u."bauleraM2") + c."quincho" + c."calefaccion",
-      "saldoActual" = ((${totalGastos} * u."coeficiente") + (${gastoPorM2} * u."cocheraM2") + (${gastoPorM2} * u."bauleraM2") + c."quincho" + c."calefaccion")
-                       + c."saldoAnterior" - c."totalPagado"
-    FROM "Unidad" AS u
-    WHERE c."unidadId" = u."id" AND c."periodoId" = ${periodoId}
-  `;
+  const cargos = await prisma.cargoUnidadPeriodo.findMany({
+    where: { periodoId },
+    select: { id: true, unidadId: true, quincho: true, calefaccion: true, saldoAnterior: true, totalPagado: true },
+  });
+
+  // Recalcula gasto común, cochera, baulera y el total de cada unidad. Con
+  // Promise.all las ~80 actualizaciones se disparan en paralelo (no una
+  // por una en secuencia), para no repetir el problema de lentitud que
+  // causaba el timeout al crear un período.
+  await prisma.$transaction(
+    async (tx) => {
+      await Promise.all(
+        cargos.map(async (cargo) => {
+          const unidad = await tx.unidad.findUniqueOrThrow({
+            where: { id: cargo.unidadId },
+            select: { coeficiente: true },
+          });
+          const gastoComun = totalGastos * unidad.coeficiente;
+          const cochera = cocheraPorUnidad.get(cargo.unidadId) ?? 0;
+          const baulera = bauleraPorUnidad.get(cargo.unidadId) ?? 0;
+          const total = gastoComun + cochera + baulera + cargo.quincho + cargo.calefaccion;
+          const saldoActual = total + cargo.saldoAnterior - cargo.totalPagado;
+          await tx.cargoUnidadPeriodo.update({
+            where: { id: cargo.id },
+            data: { gastoComun, cochera, baulera, total, saldoActual },
+          });
+        })
+      );
+
+      // Liquidación individual de cada cochera/baulera para este período:
+      // como el período ya existe, se actualiza (upsert) en vez de crear.
+      await Promise.all(
+        cocherasIndividuales.map((c) =>
+          tx.cargoCocheraPeriodo.upsert({
+            where: { periodoId_cocheraId: { periodoId, cocheraId: c.id } },
+            create: { periodoId, cocheraId: c.id, unidadCobradaId: c.unidadCobradaId, monto: c.monto },
+            update: { unidadCobradaId: c.unidadCobradaId, monto: c.monto },
+          })
+        )
+      );
+      await Promise.all(
+        baulerasIndividuales.map((b) =>
+          tx.cargoBauleraPeriodo.upsert({
+            where: { periodoId_bauleraId: { periodoId, bauleraId: b.id } },
+            create: { periodoId, bauleraId: b.id, unidadCobradaId: b.unidadCobradaId, monto: b.monto },
+            update: { unidadCobradaId: b.unidadCobradaId, monto: b.monto },
+          })
+        )
+      );
+    },
+    { timeout: 20000, maxWait: 10000 }
+  );
 }

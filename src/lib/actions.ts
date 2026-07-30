@@ -6,7 +6,15 @@ import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CategoriaReclamo } from "@prisma/client";
-import { crearPeriodoYCalcular, actualizarPeriodoYCalcular, registrarPago, actualizarCalefaccion, MONTO_QUINCHO } from "@/lib/calculo";
+import {
+  crearPeriodoYCalcular,
+  actualizarPeriodoYCalcular,
+  registrarPago,
+  actualizarCalefaccion,
+  calcularTotalM2Edificio,
+  agruparM2ComplementariosPorUnidad,
+  MONTO_QUINCHO,
+} from "@/lib/calculo";
 import { generarPdfLiquidacion } from "@/lib/pdf";
 import { enviarLiquidacionPorEmail, enviarRespuestaReclamoPorEmail } from "@/lib/email";
 
@@ -261,11 +269,8 @@ export async function enviarLiquidacionesPorEmailAction(
       return { ok: false, error: "No hay unidades para enviar en este período." };
     }
 
-    const agregadoM2 = await prisma.unidad.aggregate({
-      _sum: { m2: true, cocheraM2: true, bauleraM2: true },
-    });
-    const totalM2Edificio =
-      (agregadoM2._sum.m2 ?? 0) + (agregadoM2._sum.cocheraM2 ?? 0) + (agregadoM2._sum.bauleraM2 ?? 0);
+    const totalM2Edificio = await calcularTotalM2Edificio();
+    const m2ComplementariosPorUnidad = await agruparM2ComplementariosPorUnidad();
 
     let enviados = 0;
     const sinEmail: string[] = [];
@@ -279,6 +284,8 @@ export async function enviarLiquidacionesPorEmailAction(
         continue;
       }
 
+      const m2Complementarios = m2ComplementariosPorUnidad.get(cargo.unidad.id);
+
       const pdfBytes = await generarPdfLiquidacion(
         {
           torre: cargo.unidad.torre,
@@ -286,8 +293,8 @@ export async function enviarLiquidacionesPorEmailAction(
           depto: cargo.unidad.depto,
           titular: cargo.unidad.titular,
           m2: cargo.unidad.m2,
-          cocheraM2: cargo.unidad.cocheraM2,
-          bauleraM2: cargo.unidad.bauleraM2,
+          cocheraM2: m2Complementarios?.cocheraM2 ?? 0,
+          bauleraM2: m2Complementarios?.bauleraM2 ?? 0,
         },
         {
           etiqueta: periodo.etiqueta,
@@ -454,6 +461,51 @@ export async function marcarDesarrolladorAction(formData: FormData) {
 
   revalidatePath("/admin/unidades");
   revalidatePath("/admin");
+}
+
+// ---------- ADMIN: cocheras y bauleras ----------
+
+/**
+ * Asigna (o desasigna, si unidadId viene vacío) una cochera a una unidad.
+ * Solo cambia a quién se le cobra DE ACÁ EN ADELANTE: los períodos ya
+ * generados no se recalculan, porque son liquidaciones cerradas de meses
+ * anteriores.
+ */
+export async function asignarCocheraAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    await requireAdmin();
+    const cocheraId = String(formData.get("cocheraId"));
+    const unidadIdRaw = String(formData.get("unidadId") ?? "");
+    const unidadId = unidadIdRaw.trim() === "" ? null : unidadIdRaw;
+
+    await prisma.cochera.update({ where: { id: cocheraId }, data: { unidadId } });
+
+    revalidatePath("/admin/cocheras-bauleras");
+    revalidatePath("/admin/unidades");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[asignarCocheraAction] Error inesperado:", e);
+    return { ok: false, error: "No se pudo asignar la cochera. Probá de nuevo en un minuto." };
+  }
+}
+
+/** Igual que asignarCocheraAction, pero para bauleras. */
+export async function asignarBauleraAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    await requireAdmin();
+    const bauleraId = String(formData.get("bauleraId"));
+    const unidadIdRaw = String(formData.get("unidadId") ?? "");
+    const unidadId = unidadIdRaw.trim() === "" ? null : unidadIdRaw;
+
+    await prisma.baulera.update({ where: { id: bauleraId }, data: { unidadId } });
+
+    revalidatePath("/admin/cocheras-bauleras");
+    revalidatePath("/admin/unidades");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[asignarBauleraAction] Error inesperado:", e);
+    return { ok: false, error: "No se pudo asignar la baulera. Probá de nuevo en un minuto." };
+  }
 }
 
 // ---------- RESERVAS (propietario y admin) ----------
