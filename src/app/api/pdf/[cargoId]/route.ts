@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generarPdfLiquidacion } from "@/lib/pdf";
+import { calcularTotalM2Edificio, agruparM2ComplementariosPorUnidad } from "@/lib/calculo";
 
 export async function GET(_req: NextRequest, { params }: { params: { cargoId: string } }) {
   const session = await getServerSession(authOptions);
@@ -21,11 +22,9 @@ export async function GET(_req: NextRequest, { params }: { params: { cargoId: st
   const esAdmin = session.user.rol === "ADMIN";
   if (!esDueño && !esAdmin) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
 
-  const agregadoM2 = await prisma.unidad.aggregate({
-    _sum: { m2: true, cocheraM2: true, bauleraM2: true },
-  });
-  const totalM2Edificio =
-    (agregadoM2._sum.m2 ?? 0) + (agregadoM2._sum.cocheraM2 ?? 0) + (agregadoM2._sum.bauleraM2 ?? 0);
+  const totalM2Edificio = await calcularTotalM2Edificio();
+  const m2ComplementariosPorUnidad = await agruparM2ComplementariosPorUnidad();
+  const m2Complementarios = m2ComplementariosPorUnidad.get(cargo.unidadId);
 
   const bytes = await generarPdfLiquidacion(
     {
@@ -34,8 +33,8 @@ export async function GET(_req: NextRequest, { params }: { params: { cargoId: st
       depto: cargo.unidad.depto,
       titular: cargo.unidad.titular,
       m2: cargo.unidad.m2,
-      cocheraM2: cargo.unidad.cocheraM2,
-      bauleraM2: cargo.unidad.bauleraM2,
+      cocheraM2: m2Complementarios?.cocheraM2 ?? 0,
+      bauleraM2: m2Complementarios?.bauleraM2 ?? 0,
     },
     {
       etiqueta: cargo.periodo.etiqueta,
