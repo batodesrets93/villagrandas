@@ -15,7 +15,22 @@ export default async function PropietarioPage() {
 
   const cargos = await prisma.cargoUnidadPeriodo.findMany({
     where: { unidadId: unidad.id },
-    include: { periodo: true, pagos: { orderBy: { fecha: "desc" } } },
+    include: {
+      periodo: {
+        include: {
+          gastos: {
+            orderBy: { orden: "asc" },
+            include: {
+              comprobantes: {
+                orderBy: { createdAt: "desc" },
+                select: { id: true, nombreArchivo: true },
+              },
+            },
+          },
+        },
+      },
+      pagos: { orderBy: { fecha: "desc" } },
+    },
     orderBy: { periodo: { fechaInicio: "desc" } },
   });
 
@@ -79,10 +94,38 @@ export default async function PropietarioPage() {
                   )}
                 </td>
                 <td className={c.saldoActual > 0 ? "text-red-600 font-medium" : ""}>{money(c.saldoActual)}</td>
-                <td>
-                  <a href={`/api/pdf/${c.id}`} className="text-brand-600 underline text-sm">
+                <td className="space-y-1">
+                  <a href={`/api/pdf/${c.id}`} className="text-brand-600 underline text-sm block">
                     PDF
                   </a>
+                  {c.periodo.gastos.some((g) => g.comprobantes.length > 0) && (
+                    <details>
+                      <summary className="cursor-pointer text-xs text-brand-600 underline">Comprobantes</summary>
+                      <ul className="mt-1 space-y-1">
+                        {c.periodo.gastos
+                          .filter((g) => g.comprobantes.length > 0)
+                          .map((g) => (
+                            <li key={g.id} className="text-xs">
+                              <span className="text-gray-500">{g.nombre}:</span>
+                              <ul className="ml-2">
+                                {g.comprobantes.map((comp) => (
+                                  <li key={comp.id}>
+                                    <a
+                                      href={`/api/comprobantes/${comp.id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-brand-600 underline"
+                                    >
+                                      {comp.nombreArchivo}
+                                    </a>
+                                  </li>
+                                ))}
+                              </ul>
+                            </li>
+                          ))}
+                      </ul>
+                    </details>
+                  )}
                 </td>
               </tr>
             ))}
