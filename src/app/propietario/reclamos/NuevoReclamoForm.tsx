@@ -48,6 +48,18 @@ export default function NuevoReclamoForm() {
         ))}
       </select>
       <textarea name="descripcion" placeholder="Contanos qué pasó..." rows={3} required />
+      <div>
+        <label className="text-xs text-gray-500 block mb-1">
+          Adjuntar fotos o PDF (opcional, hasta 5 archivos, 8 MB c/u)
+        </label>
+        <input
+          type="file"
+          name="archivos"
+          multiple
+          accept="application/pdf,image/jpeg,image/png,image/webp"
+          className="text-xs"
+        />
+      </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={cargando} className="btn btn-primary">
         {cargando ? "Enviando..." : "Enviar reclamo"}
