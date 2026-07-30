@@ -20,7 +20,13 @@ type UnidadRow = {
 };
 
 function m2Texto(n: number) {
-  return n ? n.toLocaleString("es-AR", { minimumFractionDigits: 1 }) + " m²" : "-";
+  // Se muestra redondeado (sin decimales); el valor real (con decimales) es
+  // el que se sigue usando para el cálculo de incidencias y prorrateo.
+  return n ? Math.round(n).toLocaleString("es-AR") + " m²" : "-";
+}
+
+function porcentajeTexto(n: number) {
+  return (n * 100).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + " %";
 }
 
 function normalizar(s: string) {
@@ -32,6 +38,14 @@ function normalizar(s: string) {
 
 export default function UnidadesTable({ unidades }: { unidades: UnidadRow[] }) {
   const [busqueda, setBusqueda] = useState("");
+
+  // m2 total del edificio (deptos + cocheras + bauleras de TODAS las
+  // unidades, sin importar el filtro de búsqueda) para calcular el % de
+  // incidencia total de cada unidad: (m2 + cocheraM2 + bauleraM2) / total.
+  const totalM2Edificio = useMemo(
+    () => unidades.reduce((acc, u) => acc + u.m2 + u.cocheraM2 + u.bauleraM2, 0),
+    [unidades]
+  );
 
   const filtradas = useMemo(() => {
     const q = normalizar(busqueda.trim());
@@ -54,6 +68,7 @@ export default function UnidadesTable({ unidades }: { unidades: UnidadRow[] }) {
       "m²": u.m2,
       "Cochera (m²)": u.cocheraM2,
       "Baulera (m²)": u.bauleraM2,
+      "% Incidencia total": totalM2Edificio > 0 ? (u.m2 + u.cocheraM2 + u.bauleraM2) / totalM2Edificio : 0,
       Edificio: u.esDesarrollador ? "Sí" : "No",
       Email: u.email ?? "",
     }));
@@ -67,6 +82,7 @@ export default function UnidadesTable({ unidades }: { unidades: UnidadRow[] }) {
       { wch: 8 },
       { wch: 12 },
       { wch: 12 },
+      { wch: 14 },
       { wch: 10 },
       { wch: 28 },
     ];
@@ -109,6 +125,7 @@ export default function UnidadesTable({ unidades }: { unidades: UnidadRow[] }) {
               <th>m²</th>
               <th title="m² asignado; el monto se calcula por período">Cochera</th>
               <th title="m² asignado; el monto se calcula por período">Baulera</th>
+              <th title="(m² unidad + cochera + baulera) / m² total del edificio">% Incidencia total</th>
               <th title="No aparece en el ranking de deudores del dashboard">Edificio</th>
               <th>Acceso</th>
               <th></th>
@@ -124,6 +141,11 @@ export default function UnidadesTable({ unidades }: { unidades: UnidadRow[] }) {
                 <td>{u.m2}</td>
                 <td>{m2Texto(u.cocheraM2)}</td>
                 <td>{m2Texto(u.bauleraM2)}</td>
+                <td>
+                  {totalM2Edificio > 0
+                    ? porcentajeTexto((u.m2 + u.cocheraM2 + u.bauleraM2) / totalM2Edificio)
+                    : "-"}
+                </td>
                 <td>
                   <DesarrolladorToggle unidadId={u.id} checked={u.esDesarrollador} />
                 </td>
@@ -154,7 +176,7 @@ export default function UnidadesTable({ unidades }: { unidades: UnidadRow[] }) {
             ))}
             {filtradas.length === 0 && (
               <tr>
-                <td colSpan={10} className="text-center text-gray-500 py-6">
+                <td colSpan={11} className="text-center text-gray-500 py-6">
                   No se encontraron unidades para &quot;{busqueda}&quot;.
                 </td>
               </tr>
