@@ -101,6 +101,19 @@ model GastoCategoria {
   monto          Float
   esFondoReserva Boolean        @default(false)
   orden          Int            @default(0)
+
+  comprobantes   Comprobante[]
+}
+
+model Comprobante {
+  id            String         @id @default(cuid())
+  gastoId       String
+  gasto         GastoCategoria @relation(fields: [gastoId], references: [id], onDelete: Cascade)
+  nombreArchivo String
+  tipoArchivo   String
+  tamanio       Int
+  datos         Bytes
+  createdAt     DateTime       @default(now())
 }
 
 model CargoUnidadPeriodo {
