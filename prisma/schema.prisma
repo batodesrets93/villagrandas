@@ -84,13 +84,11 @@ model Unidad {
   @@unique([torre, piso, depto])
 }
 
-/**
- * Cada cochera es su propia unidad complementaria, con su propio m2 y su
- * propio coeficiente sobre el m2 total del edificio (igual que en la
- * pestaña "COCHERAS" del excel). unidadId es opcional: si es null, la
- * cochera no tiene propietario asignado todavia, y su parte del gasto se
- * le carga a la unidad marcada como esConsolidadaCocheraBaulera.
- */
+// Cada cochera es su propia unidad complementaria, con su propio m2 y su
+// propio coeficiente sobre el m2 total del edificio (igual que en la
+// pestaña "COCHERAS" del excel). unidadId es opcional: si es null, la
+// cochera no tiene propietario asignado todavia, y su parte del gasto se
+// le carga a la unidad marcada como esConsolidadaCocheraBaulera.
 model Cochera {
   id             String  @id @default(cuid())
   planta         String
@@ -107,7 +105,7 @@ model Cochera {
   @@unique([planta, numero])
 }
 
-/** Igual que Cochera, pero para bauleras. */
+// Igual que Cochera, pero para bauleras.
 model Baulera {
   id       String  @id @default(cuid())
   planta   String
@@ -185,13 +183,11 @@ model CargoUnidadPeriodo {
   @@unique([periodoId, unidadId])
 }
 
-/**
- * Liquidacion individual de cada cochera en un periodo dado (igual criterio
- * que la pestaña "COCHERAS" del excel: monto = m2 de esa cochera * (total
- * de gastos del periodo / m2 total del edificio)). Queda guardado a que
- * unidad se le cobro en ese momento, aunque despues se reasigne la cochera
- * a otro propietario.
- */
+// Liquidacion individual de cada cochera en un periodo dado (igual criterio
+// que la pestaña "COCHERAS" del excel: monto = m2 de esa cochera * (total
+// de gastos del periodo / m2 total del edificio)). Queda guardado a que
+// unidad se le cobro en ese momento, aunque despues se reasigne la cochera
+// a otro propietario.
 model CargoCocheraPeriodo {
   id                String         @id @default(cuid())
   periodoId         String
@@ -204,7 +200,7 @@ model CargoCocheraPeriodo {
   @@unique([periodoId, cocheraId])
 }
 
-/** Igual que CargoCocheraPeriodo, pero para bauleras. */
+// Igual que CargoCocheraPeriodo, pero para bauleras.
 model CargoBauleraPeriodo {
   id                String         @id @default(cuid())
   periodoId         String
