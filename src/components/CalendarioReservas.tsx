@@ -73,22 +73,26 @@ export default function CalendarioReservas({
           </Link>
         </div>
 
-        <div className="flex gap-3 text-xs text-gray-500 mb-2">
+        {/* Leyenda: en mobile scrollea horizontal en vez de wrappear feo */}
+        <div className="flex gap-3 text-xs text-gray-500 mb-2 overflow-x-auto whitespace-nowrap pb-1 sm:whitespace-normal sm:overflow-visible">
           {Object.entries(QUINCHO_COLORES).map(([nombre, c]) => (
-            <span key={nombre} className="flex items-center gap-1">
+            <span key={nombre} className="flex items-center gap-1 flex-shrink-0">
               <span style={{ background: c.dot }} className="w-2 h-2 rounded-full inline-block" />
               {nombre}
             </span>
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-500 mb-1">
+        <div className="grid grid-cols-7 gap-0.5 sm:gap-1 text-center text-[10px] sm:text-xs text-gray-500 mb-1">
+          {["D", "L", "M", "M", "J", "V", "S"].map((d, i) => (
+            <div key={i} className="sm:hidden">{d}</div>
+          ))}
           {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((d) => (
-            <div key={d}>{d}</div>
+            <div key={d} className="hidden sm:block">{d}</div>
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-1">
+        <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
           {dias.map((dia) => {
             const key = format(dia, "yyyy-MM-dd");
             const delDia = porDia.get(key) ?? [];
@@ -99,28 +103,52 @@ export default function CalendarioReservas({
               <Link
                 key={key}
                 href={hrefDia(dia)}
-                className="rounded-lg p-1 text-xs block"
+                className="rounded-lg p-0.5 sm:p-1 text-xs block overflow-hidden"
                 style={{
                   background: enMes ? "white" : "#f7f8f7",
                   border: seleccionado ? "2px solid #255943" : "1px solid #eee",
-                  minHeight: "64px",
+                  minHeight: "44px",
+                  maxHeight: "72px",
                   opacity: enMes ? 1 : 0.5,
                 }}
               >
-                <div className="font-semibold text-gray-700 mb-1">{format(dia, "d")}</div>
-                {delDia.slice(0, 3).map((r) => {
-                  const c = QUINCHO_COLORES[r.quinchoNombre] ?? COLOR_DEFAULT;
-                  return (
-                    <div
-                      key={r.id}
-                      className="rounded px-1 mb-0.5 truncate"
-                      style={{ background: c.bg, color: c.text }}
-                    >
-                      {r.quinchoNombre} · {r.turno === "MEDIODIA" ? "Mediodía" : "Noche"}
-                    </div>
-                  );
-                })}
-                {delDia.length > 3 && <div className="text-gray-400">+{delDia.length - 3} más</div>}
+                <div className="font-semibold text-gray-700 text-[10px] sm:text-xs mb-0.5 sm:mb-1">
+                  {format(dia, "d")}
+                </div>
+
+                {/* Mobile: solo puntos de color, sin texto */}
+                <div className="flex flex-wrap gap-0.5 sm:hidden">
+                  {delDia.slice(0, 4).map((r) => {
+                    const c = QUINCHO_COLORES[r.quinchoNombre] ?? COLOR_DEFAULT;
+                    return (
+                      <span
+                        key={r.id}
+                        className="w-1.5 h-1.5 rounded-full inline-block"
+                        style={{ background: c.dot ?? c.bg }}
+                      />
+                    );
+                  })}
+                  {delDia.length > 4 && (
+                    <span className="text-[9px] text-gray-400">+{delDia.length - 4}</span>
+                  )}
+                </div>
+
+                {/* Desktop: texto completo como antes */}
+                <div className="hidden sm:block">
+                  {delDia.slice(0, 3).map((r) => {
+                    const c = QUINCHO_COLORES[r.quinchoNombre] ?? COLOR_DEFAULT;
+                    return (
+                      <div
+                        key={r.id}
+                        className="rounded px-1 mb-0.5 truncate"
+                        style={{ background: c.bg, color: c.text }}
+                      >
+                        {r.quinchoNombre} · {r.turno === "MEDIODIA" ? "Mediodía" : "Noche"}
+                      </div>
+                    );
+                  })}
+                  {delDia.length > 3 && <div className="text-gray-400">+{delDia.length - 3} más</div>}
+                </div>
               </Link>
             );
           })}
@@ -137,7 +165,7 @@ export default function CalendarioReservas({
           )}
           <div className="space-y-2">
             {reservasDelDiaSeleccionado.map((r) => (
-              <div key={r.id} className="flex items-center justify-between text-sm border-t border-gray-100 pt-2">
+              <div key={r.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-sm border-t border-gray-100 pt-2">
                 <span>
                   <strong className="text-brand-700">{r.quinchoNombre}</strong> ·{" "}
                   {r.turno === "MEDIODIA" ? "Mediodía" : "Noche"} · {r.unidadLabel}
