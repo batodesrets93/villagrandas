@@ -33,23 +33,27 @@ export default function ComprobantesGasto({
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  async function onSubirArchivo() {
-    const archivo = inputRef.current?.files?.[0];
-    if (!archivo) return;
+  async function onSubirArchivos() {
+    const archivos = inputRef.current?.files;
+    if (!archivos || archivos.length === 0) return;
 
     setError("");
     setSubiendo(true);
-    const formData = new FormData();
-    formData.set("gastoId", gastoId);
-    formData.set("archivo", archivo);
 
-    const resultado = await subirComprobanteAction(formData);
+    const errores: string[] = [];
+    for (const archivo of Array.from(archivos)) {
+      const formData = new FormData();
+      formData.set("gastoId", gastoId);
+      formData.set("archivo", archivo);
+      const resultado = await subirComprobanteAction(formData);
+      if (!resultado.ok) errores.push(`${archivo.name}: ${resultado.error}`);
+    }
+
     setSubiendo(false);
     if (inputRef.current) inputRef.current.value = "";
 
-    if (!resultado.ok) {
-      setError(resultado.error);
-      return;
+    if (errores.length > 0) {
+      setError(errores.join(" · "));
     }
     router.refresh();
   }
@@ -104,8 +108,9 @@ export default function ComprobantesGasto({
         <input
           ref={inputRef}
           type="file"
+          multiple
           accept="application/pdf,image/jpeg,image/png,image/webp"
-          onChange={onSubirArchivo}
+          onChange={onSubirArchivos}
           disabled={subiendo}
           className="text-xs"
         />
