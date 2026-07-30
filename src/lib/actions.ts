@@ -261,6 +261,12 @@ export async function enviarLiquidacionesPorEmailAction(
       return { ok: false, error: "No hay unidades para enviar en este período." };
     }
 
+    const agregadoM2 = await prisma.unidad.aggregate({
+      _sum: { m2: true, cocheraM2: true, bauleraM2: true },
+    });
+    const totalM2Edificio =
+      (agregadoM2._sum.m2 ?? 0) + (agregadoM2._sum.cocheraM2 ?? 0) + (agregadoM2._sum.bauleraM2 ?? 0);
+
     let enviados = 0;
     const sinEmail: string[] = [];
 
@@ -280,6 +286,8 @@ export async function enviarLiquidacionesPorEmailAction(
           depto: cargo.unidad.depto,
           titular: cargo.unidad.titular,
           m2: cargo.unidad.m2,
+          cocheraM2: cargo.unidad.cocheraM2,
+          bauleraM2: cargo.unidad.bauleraM2,
         },
         {
           etiqueta: periodo.etiqueta,
@@ -297,7 +305,8 @@ export async function enviarLiquidacionesPorEmailAction(
           saldoAnterior: cargo.saldoAnterior,
           totalPagado: cargo.totalPagado,
           saldoActual: cargo.saldoActual,
-        }
+        },
+        totalM2Edificio
       );
 
       const nombreArchivo = `expensa_${cargo.unidad.piso}${cargo.unidad.depto}_${periodo.etiqueta.replace(/\s+/g, "_")}.pdf`;
