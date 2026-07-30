@@ -6,6 +6,15 @@ function money(n: number) {
   return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2 });
 }
 
+function m2Texto(n: number) {
+  // Redondeado para mostrar; el valor real se sigue usando en el cálculo.
+  return n ? Math.round(n).toLocaleString("es-AR") + " m²" : "-";
+}
+
+function porcentajeTexto(n: number) {
+  return (n * 100).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + " %";
+}
+
 export default async function DetallePeriodoPage({ params }: { params: { id: string } }) {
   const periodo = await prisma.periodoExpensa.findUniqueOrThrow({
     where: { id: params.id },
@@ -14,6 +23,13 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
       cargos: { include: { unidad: true, pagos: true }, orderBy: [{ unidad: { torre: "asc" } }, { unidad: { piso: "asc" } }, { unidad: { depto: "asc" } }] },
     },
   });
+
+  // m2 total del edificio (deptos + cocheras + bauleras de todas las
+  // unidades de este período) para el % de incidencia total de cada unidad.
+  const totalM2Edificio = periodo.cargos.reduce(
+    (acc, c) => acc + c.unidad.m2 + c.unidad.cocheraM2 + c.unidad.bauleraM2,
+    0
+  );
 
   return (
     <div className="space-y-6">
@@ -57,6 +73,8 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
               <th>Titular</th>
               <th>Gasto común</th>
               <th>Coch./Baul.</th>
+              <th title="m² de cochera y baulera asignados a la unidad">Coch./Baul. (m²)</th>
+              <th title="(m² unidad + cochera + baulera) / m² total del edificio">% Incidencia total</th>
               <th>Quincho</th>
               <th>Calefacción</th>
               <th>Total</th>
@@ -75,6 +93,19 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                 <td>{c.unidad.titular}</td>
                 <td>{money(c.gastoComun)}</td>
                 <td>{money(c.cochera + c.baulera)}</td>
+                <td>
+                  {c.unidad.cocheraM2 > 0 && m2Texto(c.unidad.cocheraM2)}
+                  {c.unidad.cocheraM2 > 0 && c.unidad.bauleraM2 > 0 && " + "}
+                  {c.unidad.bauleraM2 > 0 && m2Texto(c.unidad.bauleraM2)}
+                  {c.unidad.cocheraM2 === 0 && c.unidad.bauleraM2 === 0 && "-"}
+                </td>
+                <td>
+                  {totalM2Edificio > 0
+                    ? porcentajeTexto(
+                        (c.unidad.m2 + c.unidad.cocheraM2 + c.unidad.bauleraM2) / totalM2Edificio
+                      )
+                    : "-"}
+                </td>
                 <td>{money(c.quincho)}</td>
                 <td>
                   <form action={actualizarCalefaccionAction} className="flex gap-1">
