@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { registrarPagoAction, actualizarCalefaccionAction } from "@/lib/actions";
+import { agruparM2ComplementariosPorUnidad, calcularTotalM2Edificio } from "@/lib/calculo";
 import EnviarEmailsButton from "@/components/EnviarEmailsButton";
 
 function money(n: number) {
@@ -24,12 +25,12 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
     },
   });
 
-  // m2 total del edificio (deptos + cocheras + bauleras de todas las
-  // unidades de este período) para el % de incidencia total de cada unidad.
-  const totalM2Edificio = periodo.cargos.reduce(
-    (acc, c) => acc + c.unidad.m2 + c.unidad.cocheraM2 + c.unidad.bauleraM2,
-    0
-  );
+  // m2 total REAL del edificio (deptos + TODAS las cocheras + TODAS las
+  // bauleras, asignadas o no) para el % de incidencia total de cada unidad.
+  const [m2ComplementariosPorUnidad, totalM2Edificio] = await Promise.all([
+    agruparM2ComplementariosPorUnidad(),
+    calcularTotalM2Edificio(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -85,7 +86,11 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
             </tr>
           </thead>
           <tbody>
-            {periodo.cargos.map((c) => (
+            {periodo.cargos.map((c) => {
+              const m2Complementarios = m2ComplementariosPorUnidad.get(c.unidadId);
+              const cocheraM2 = m2Complementarios?.cocheraM2 ?? 0;
+              const bauleraM2 = m2Complementarios?.bauleraM2 ?? 0;
+              return (
               <tr key={c.id}>
                 <td>
                   {c.unidad.torre === "GRANDE" ? "TG" : "TC"} {c.unidad.piso}º{c.unidad.depto}
@@ -94,16 +99,14 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                 <td>{money(c.gastoComun)}</td>
                 <td>{money(c.cochera + c.baulera)}</td>
                 <td>
-                  {c.unidad.cocheraM2 > 0 && m2Texto(c.unidad.cocheraM2)}
-                  {c.unidad.cocheraM2 > 0 && c.unidad.bauleraM2 > 0 && " + "}
-                  {c.unidad.bauleraM2 > 0 && m2Texto(c.unidad.bauleraM2)}
-                  {c.unidad.cocheraM2 === 0 && c.unidad.bauleraM2 === 0 && "-"}
+                  {cocheraM2 > 0 && m2Texto(cocheraM2)}
+                  {cocheraM2 > 0 && bauleraM2 > 0 && " + "}
+                  {bauleraM2 > 0 && m2Texto(bauleraM2)}
+                  {cocheraM2 === 0 && bauleraM2 === 0 && "-"}
                 </td>
                 <td>
                   {totalM2Edificio > 0
-                    ? porcentajeTexto(
-                        (c.unidad.m2 + c.unidad.cocheraM2 + c.unidad.bauleraM2) / totalM2Edificio
-                      )
+                    ? porcentajeTexto((c.unidad.m2 + cocheraM2 + bauleraM2) / totalM2Edificio)
                     : "-"}
                 </td>
                 <td>{money(c.quincho)}</td>
@@ -139,7 +142,8 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                   </details>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
