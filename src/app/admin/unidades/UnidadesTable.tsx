@@ -36,16 +36,20 @@ function normalizar(s: string) {
     .toLowerCase();
 }
 
-export default function UnidadesTable({ unidades }: { unidades: UnidadRow[] }) {
-  const [busqueda, setBusqueda] = useState("");
-
-  // m2 total del edificio (deptos + cocheras + bauleras de TODAS las
-  // unidades, sin importar el filtro de búsqueda) para calcular el % de
+export default function UnidadesTable({
+  unidades,
+  totalM2Edificio,
+}: {
+  unidades: UnidadRow[];
+  // m2 total REAL del edificio (deptos + TODAS las cocheras + TODAS las
+  // bauleras, tengan o no propietario asignado), para calcular el % de
   // incidencia total de cada unidad: (m2 + cocheraM2 + bauleraM2) / total.
-  const totalM2Edificio = useMemo(
-    () => unidades.reduce((acc, u) => acc + u.m2 + u.cocheraM2 + u.bauleraM2, 0),
-    [unidades]
-  );
+  // Se calcula en la página (calcularTotalM2Edificio) y no acá, porque acá
+  // solo tenemos los m2 YA asignados de cada unidad, no el total del
+  // edificio completo.
+  totalM2Edificio: number;
+}) {
+  const [busqueda, setBusqueda] = useState("");
 
   const filtradas = useMemo(() => {
     const q = normalizar(busqueda.trim());
