@@ -10,7 +10,10 @@ export async function GET(_req: NextRequest, { params }: { params: { cargoId: st
 
   const cargo = await prisma.cargoUnidadPeriodo.findUnique({
     where: { id: params.cargoId },
-    include: { unidad: true, periodo: true },
+    include: {
+      unidad: true,
+      periodo: { include: { gastos: { orderBy: { orden: "asc" } } } },
+    },
   });
   if (!cargo) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
@@ -51,7 +54,13 @@ export async function GET(_req: NextRequest, { params }: { params: { cargoId: st
       totalPagado: cargo.totalPagado,
       saldoActual: cargo.saldoActual,
     },
-    totalM2Edificio
+    totalM2Edificio,
+    cargo.periodo.gastos.map((g) => ({
+      nombre: g.nombre,
+      monto: g.monto,
+      esFondoReserva: g.esFondoReserva,
+    })),
+    cargo.periodo.totalGastos
   );
 
   const nombreArchivo = `expensa_${cargo.unidad.piso}${cargo.unidad.depto}_${cargo.periodo.etiqueta.replace(/\s+/g, "_")}.pdf`;
