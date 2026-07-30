@@ -22,7 +22,7 @@ const categoriaLabel: Record<string, string> = {
 export default async function ReclamosAdminPage() {
   const reclamos = await prisma.reclamo.findMany({
     orderBy: { createdAt: "desc" },
-    include: { unidad: true, usuario: true },
+    include: { unidad: true, usuario: true, adjuntos: true },
   });
 
   return (
@@ -45,6 +45,24 @@ export default async function ReclamosAdminPage() {
               <span className={`text-xs px-2 py-1 rounded-full ${badge[r.estado]}`}>{r.estado}</span>
             </div>
             <p className="text-sm text-gray-700 mb-3">{r.descripcion}</p>
+
+            {r.adjuntos.length > 0 && (
+              <ul className="flex flex-wrap gap-2 mb-3">
+                {r.adjuntos.map((a) => (
+                  <li key={a.id}>
+                    <a
+                      href={`/api/reclamos-adjuntos/${a.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-brand-600 underline"
+                      title={a.nombreArchivo}
+                    >
+                      📎 {a.nombreArchivo}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
 
             {r.respuesta && (
               <div className="bg-brand-50 border border-brand-100 rounded-lg p-3 mb-3 text-sm">
