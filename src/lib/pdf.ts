@@ -18,6 +18,8 @@ type UnidadDatos = {
   depto: string;
   titular: string;
   m2: number;
+  cocheraM2: number;
+  bauleraM2: number;
 };
 
 type PeriodoDatos = {
@@ -35,7 +37,20 @@ function fecha(d: Date) {
   return d.toLocaleDateString("es-AR");
 }
 
-export async function generarPdfLiquidacion(unidad: UnidadDatos, periodo: PeriodoDatos, cargo: CargoConDatos) {
+function m2Redondeado(n: number) {
+  return Math.round(n) + " m²";
+}
+
+function porcentaje(n: number) {
+  return n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + " %";
+}
+
+export async function generarPdfLiquidacion(
+  unidad: UnidadDatos,
+  periodo: PeriodoDatos,
+  cargo: CargoConDatos,
+  totalM2Edificio: number
+) {
   const doc = await PDFDocument.create();
   const page = doc.addPage([595.28, 841.89]); // A4
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -74,6 +89,22 @@ export async function generarPdfLiquidacion(unidad: UnidadDatos, periodo: Period
     x: marginX,
     y,
     size: 10,
+    font,
+    color: gris,
+  });
+  y -= 16;
+
+  const partesM2: string[] = [];
+  if (unidad.cocheraM2 > 0) partesM2.push(`Cochera: ${m2Redondeado(unidad.cocheraM2)}`);
+  if (unidad.bauleraM2 > 0) partesM2.push(`Baulera: ${m2Redondeado(unidad.bauleraM2)}`);
+  const incidenciaTotal =
+    totalM2Edificio > 0 ? ((unidad.m2 + unidad.cocheraM2 + unidad.bauleraM2) / totalM2Edificio) * 100 : 0;
+  partesM2.push(`Incidencia total: ${porcentaje(incidenciaTotal)}`);
+
+  page.drawText(partesM2.join("   ·   "), {
+    x: marginX,
+    y,
+    size: 9,
     font,
     color: gris,
   });
