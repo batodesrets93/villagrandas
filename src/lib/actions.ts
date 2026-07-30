@@ -338,6 +338,87 @@ export async function enviarLiquidacionesPorEmailAction(
   }
 }
 
+// ---------- ADMIN: comprobantes de gastos ----------
+
+const TIPOS_COMPROBANTE_PERMITIDOS = ["application/pdf", "image/jpeg", "image/jpg", "image/png", "image/webp"];
+const TAMANIO_MAXIMO_COMPROBANTE = 8 * 1024 * 1024; // 8 MB
+
+export async function subirComprobanteAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    await requireAdmin();
+
+    const gastoId = String(formData.get("gastoId"));
+    const archivo = formData.get("archivo") as File | null;
+
+    if (!gastoId) {
+      return { ok: false, error: "Falta el gasto al que corresponde el comprobante." };
+    }
+    if (!archivo || archivo.size === 0) {
+      return { ok: false, error: "Elegí un archivo para subir." };
+    }
+    if (!TIPOS_COMPROBANTE_PERMITIDOS.includes(archivo.type)) {
+      return { ok: false, error: "Solo se aceptan archivos PDF, JPG, PNG o WEBP." };
+    }
+    if (archivo.size > TAMANIO_MAXIMO_COMPROBANTE) {
+      return { ok: false, error: "El archivo no puede superar los 8 MB." };
+    }
+
+    const gasto = await prisma.gastoCategoria.findUnique({ where: { id: gastoId }, select: { periodoId: true } });
+    if (!gasto) {
+      return { ok: false, error: "No se encontró el gasto correspondiente." };
+    }
+
+    const buffer = Buffer.from(await archivo.arrayBuffer());
+
+    await prisma.comprobante.create({
+      data: {
+        gastoId,
+        nombreArchivo: archivo.name || "comprobante",
+        tipoArchivo: archivo.type,
+        tamanio: archivo.size,
+        datos: buffer,
+      },
+    });
+
+    revalidatePath(`/admin/expensas/${gasto.periodoId}`);
+    revalidatePath("/propietario");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[subirComprobanteAction] Error inesperado:", e);
+    return {
+      ok: false,
+      error: "No se pudo subir el comprobante por un error inesperado en el servidor. Probá de nuevo en un minuto.",
+    };
+  }
+}
+
+export async function eliminarComprobanteAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    await requireAdmin();
+    const comprobanteId = String(formData.get("comprobanteId"));
+
+    const comprobante = await prisma.comprobante.findUnique({
+      where: { id: comprobanteId },
+      select: { gasto: { select: { periodoId: true } } },
+    });
+    if (!comprobante) {
+      return { ok: false, error: "No se encontró el comprobante." };
+    }
+
+    await prisma.comprobante.delete({ where: { id: comprobanteId } });
+
+    revalidatePath(`/admin/expensas/${comprobante.gasto.periodoId}`);
+    revalidatePath("/propietario");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[eliminarComprobanteAction] Error inesperado:", e);
+    return {
+      ok: false,
+      error: "No se pudo eliminar el comprobante por un error inesperado en el servidor. Probá de nuevo en un minuto.",
+    };
+  }
+}
+
 // ---------- ADMIN: unidades / propietarios ----------
 
 export async function crearAccesoPropietarioAction(formData: FormData) {

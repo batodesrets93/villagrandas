@@ -215,16 +215,43 @@ export async function actualizarPeriodoYCalcular(
     },
   });
 
-  await prisma.gastoCategoria.deleteMany({ where: { periodoId } });
-  await prisma.gastoCategoria.createMany({
-    data: params.categorias.map((c, i) => ({
-      periodoId,
-      nombre: c.nombre,
-      monto: c.monto,
-      esFondoReserva: c.esFondoReserva ?? false,
-      orden: i,
-    })),
-  });
+  // Las categorías se reconcilian por nombre (en vez de borrar todo y
+  // recrear) para no perder los comprobantes ya subidos a una categoría que
+  // sigue existiendo, aunque haya cambiado de monto u orden. Si el admin
+  // cambia el nombre de una categoría, se trata como una categoría nueva
+  // (y la anterior, con sus comprobantes, se elimina) porque no hay otra
+  // forma de saber que es "la misma" fila.
+  const existentes = await prisma.gastoCategoria.findMany({ where: { periodoId } });
+  const existentesPorNombre = new Map(existentes.map((g) => [g.nombre.trim().toLowerCase(), g]));
+  const idsConservados = new Set<string>();
+
+  for (const [i, c] of params.categorias.entries()) {
+    const clave = c.nombre.trim().toLowerCase();
+    const existente = existentesPorNombre.get(clave);
+    if (existente && !idsConservados.has(existente.id)) {
+      await prisma.gastoCategoria.update({
+        where: { id: existente.id },
+        data: { monto: c.monto, esFondoReserva: c.esFondoReserva ?? false, orden: i },
+      });
+      idsConservados.add(existente.id);
+    } else {
+      const nueva = await prisma.gastoCategoria.create({
+        data: {
+          periodoId,
+          nombre: c.nombre,
+          monto: c.monto,
+          esFondoReserva: c.esFondoReserva ?? false,
+          orden: i,
+        },
+      });
+      idsConservados.add(nueva.id);
+    }
+  }
+
+  const idsAEliminar = existentes.filter((g) => !idsConservados.has(g.id)).map((g) => g.id);
+  if (idsAEliminar.length > 0) {
+    await prisma.gastoCategoria.deleteMany({ where: { id: { in: idsAEliminar } } });
+  }
 
   // m2 total del edificio (deptos + cocheras + baulera), igual criterio que
   // en crearPeriodoYCalcular, para poder prorratear cochera/baulera.
