@@ -263,4 +263,16 @@ model Reclamo {
   respuesta    String?
   createdAt    DateTime      @default(now())
   respondidoAt DateTime?
+  adjuntos     AdjuntoReclamo[]
+}
+
+model AdjuntoReclamo {
+  id            String   @id @default(cuid())
+  reclamoId     String
+  reclamo       Reclamo  @relation(fields: [reclamoId], references: [id], onDelete: Cascade)
+  nombreArchivo String
+  tipoArchivo   String
+  tamanio       Int
+  datos         Bytes
+  createdAt     DateTime @default(now())
 }
