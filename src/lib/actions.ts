@@ -572,6 +572,10 @@ export async function cancelarReservaAction(formData: FormData) {
 
 // ---------- RECLAMOS ----------
 
+const TIPOS_ADJUNTO_RECLAMO_PERMITIDOS = ["application/pdf", "image/jpeg", "image/jpg", "image/png", "image/webp"];
+const TAMANIO_MAXIMO_ADJUNTO_RECLAMO = 8 * 1024 * 1024; // 8 MB
+const MAX_ADJUNTOS_RECLAMO = 5;
+
 export async function crearReclamoAction(formData: FormData): Promise<ResultadoAccion> {
   try {
     const session = await requirePropietario();
@@ -585,7 +589,23 @@ export async function crearReclamoAction(formData: FormData): Promise<ResultadoA
       ? (categoriaRaw as CategoriaReclamo)
       : CategoriaReclamo.OTRO;
 
-    await prisma.reclamo.create({
+    const archivos = formData
+      .getAll("archivos")
+      .filter((a): a is File => a instanceof File && a.size > 0);
+
+    if (archivos.length > MAX_ADJUNTOS_RECLAMO) {
+      return { ok: false, error: `Podés adjuntar hasta ${MAX_ADJUNTOS_RECLAMO} archivos.` };
+    }
+    for (const archivo of archivos) {
+      if (!TIPOS_ADJUNTO_RECLAMO_PERMITIDOS.includes(archivo.type)) {
+        return { ok: false, error: `${archivo.name}: solo se aceptan archivos PDF, JPG, PNG o WEBP.` };
+      }
+      if (archivo.size > TAMANIO_MAXIMO_ADJUNTO_RECLAMO) {
+        return { ok: false, error: `${archivo.name}: el archivo no puede superar los 8 MB.` };
+      }
+    }
+
+    const reclamo = await prisma.reclamo.create({
       data: {
         titulo,
         descripcion,
@@ -594,6 +614,20 @@ export async function crearReclamoAction(formData: FormData): Promise<ResultadoA
         usuarioId: session.user.id,
       },
     });
+
+    for (const archivo of archivos) {
+      const buffer = Buffer.from(await archivo.arrayBuffer());
+      await prisma.adjuntoReclamo.create({
+        data: {
+          reclamoId: reclamo.id,
+          nombreArchivo: archivo.name || "adjunto",
+          tipoArchivo: archivo.type,
+          tamanio: archivo.size,
+          datos: buffer,
+        },
+      });
+    }
+
     revalidatePath("/propietario/reclamos");
     revalidatePath("/admin/reclamos");
     return { ok: true, data: undefined };
