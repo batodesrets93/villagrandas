@@ -59,24 +59,68 @@ model Usuario {
 }
 
 model Unidad {
-  id              String   @id @default(cuid())
-  torre           Torre
-  piso            String
-  depto           String
-  titular         String
-  ambientes       String
-  m2              Float
-  coeficiente     Float
-  cocheraM2       Float    @default(0)
-  bauleraM2       Float    @default(0)
-  esDesarrollador Boolean  @default(false)
+  id                          String   @id @default(cuid())
+  torre                       Torre
+  piso                        String
+  depto                       String
+  titular                     String
+  ambientes                   String
+  m2                          Float
+  coeficiente                 Float
+  esDesarrollador             Boolean  @default(false)
+  // Marca la unica unidad "cuenta consolidada" a la que se le cargan las
+  // cocheras y bauleras que no tienen un propietario asignado (hoy, Costa
+  // Tranvial). No es un departamento real: m2 = 0 y coeficiente = 0, para
+  // que no le sume gasto comun a nadie, solo absorbe cochera/baulera.
+  esConsolidadaCocheraBaulera Boolean  @default(false)
 
   usuarios     Usuario[]
   cargos       CargoUnidadPeriodo[]
   reservas     Reserva[]
   reclamos     Reclamo[]
+  cocheras     Cochera[]
+  bauleras     Baulera[]
 
   @@unique([torre, piso, depto])
+}
+
+/**
+ * Cada cochera es su propia unidad complementaria, con su propio m2 y su
+ * propio coeficiente sobre el m2 total del edificio (igual que en la
+ * pestaña "COCHERAS" del excel). unidadId es opcional: si es null, la
+ * cochera no tiene propietario asignado todavia, y su parte del gasto se
+ * le carga a la unidad marcada como esConsolidadaCocheraBaulera.
+ */
+model Cochera {
+  id             String  @id @default(cuid())
+  planta         String
+  numero         String
+  ancho          Float
+  largo          Float
+  m2             Float
+  caracteristica String?
+  unidadId       String?
+  unidad         Unidad? @relation(fields: [unidadId], references: [id])
+
+  cargos CargoCocheraPeriodo[]
+
+  @@unique([planta, numero])
+}
+
+/** Igual que Cochera, pero para bauleras. */
+model Baulera {
+  id       String  @id @default(cuid())
+  planta   String
+  numero   String
+  ancho    Float
+  largo    Float
+  m2       Float
+  unidadId String?
+  unidad   Unidad? @relation(fields: [unidadId], references: [id])
+
+  cargos CargoBauleraPeriodo[]
+
+  @@unique([planta, numero])
 }
 
 model PeriodoExpensa {
@@ -91,6 +135,8 @@ model PeriodoExpensa {
 
   gastos      GastoCategoria[]
   cargos      CargoUnidadPeriodo[]
+  cargosCochera CargoCocheraPeriodo[]
+  cargosBaulera CargoBauleraPeriodo[]
 }
 
 model GastoCategoria {
@@ -137,6 +183,38 @@ model CargoUnidadPeriodo {
   reservas      Reserva[]
 
   @@unique([periodoId, unidadId])
+}
+
+/**
+ * Liquidacion individual de cada cochera en un periodo dado (igual criterio
+ * que la pestaña "COCHERAS" del excel: monto = m2 de esa cochera * (total
+ * de gastos del periodo / m2 total del edificio)). Queda guardado a que
+ * unidad se le cobro en ese momento, aunque despues se reasigne la cochera
+ * a otro propietario.
+ */
+model CargoCocheraPeriodo {
+  id                String         @id @default(cuid())
+  periodoId         String
+  periodo           PeriodoExpensa @relation(fields: [periodoId], references: [id], onDelete: Cascade)
+  cocheraId         String
+  cochera           Cochera        @relation(fields: [cocheraId], references: [id])
+  unidadCobradaId   String
+  monto             Float
+
+  @@unique([periodoId, cocheraId])
+}
+
+/** Igual que CargoCocheraPeriodo, pero para bauleras. */
+model CargoBauleraPeriodo {
+  id                String         @id @default(cuid())
+  periodoId         String
+  periodo           PeriodoExpensa @relation(fields: [periodoId], references: [id], onDelete: Cascade)
+  bauleraId         String
+  baulera           Baulera        @relation(fields: [bauleraId], references: [id])
+  unidadCobradaId   String
+  monto             Float
+
+  @@unique([periodoId, bauleraId])
 }
 
 model Pago {
