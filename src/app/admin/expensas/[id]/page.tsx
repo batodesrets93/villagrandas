@@ -4,7 +4,7 @@ import { agruparM2ComplementariosPorUnidad, calcularTotalM2Edificio } from "@/li
 import EnviarEmailsButton from "@/components/EnviarEmailsButton";
 
 function money(n: number) {
-  return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2 });
+  return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function m2Texto(n: number) {
