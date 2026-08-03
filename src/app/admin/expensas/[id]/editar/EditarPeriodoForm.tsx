@@ -214,7 +214,7 @@ export default function EditarPeriodoForm({
 
                 {g.items.length > 1 && (
                   <div className="text-right text-xs text-gray-500 mt-1">
-                    Subtotal: $ {subtotal.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+                    Subtotal: $ {subtotal.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 )}
               </div>
@@ -223,7 +223,7 @@ export default function EditarPeriodoForm({
         </div>
 
         <div className="mt-4 text-right font-semibold">
-          Total gastos: $ {total.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+          Total gastos: $ {total.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </div>
       </div>
 
