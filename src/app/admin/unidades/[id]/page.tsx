@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
 function money(n: number) {
-  return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2 });
+  return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default async function DetalleUnidadPage({ params }: { params: { id: string } }) {
