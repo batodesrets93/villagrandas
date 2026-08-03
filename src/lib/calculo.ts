@@ -153,7 +153,11 @@ export async function crearPeriodoYCalcular(params: {
     await calcularComplementarios(totalGastos);
 
   const reservasPendientes = await prisma.reserva.findMany({
-    where: { estado: "CONFIRMADA", cargoId: null },
+    where: {
+      estado: "CONFIRMADA",
+      cargoId: null,
+      fecha: { gte: params.fechaInicio, lte: params.fechaFin },
+    },
     select: { id: true, unidadId: true },
   });
   const quinchoPorUnidad = new Map<string, string[]>();
