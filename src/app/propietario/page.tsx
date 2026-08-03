@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import CambiarPasswordForm from "@/components/CambiarPasswordForm";
 
 function money(n: number) {
-  return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2 });
+  return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default async function PropietarioPage() {
