@@ -152,19 +152,26 @@ export async function crearPeriodoYCalcular(params: {
   const { cocheraPorUnidad, bauleraPorUnidad, cocherasIndividuales, baulerasIndividuales } =
     await calcularComplementarios(totalGastos);
 
+  // Se trae tambien montoAplicado: el precio del quincho puede cambiar con
+  // el tiempo, y cada reserva "congela" el precio vigente al momento de
+  // reservar. Por eso el monto a facturar se suma reserva por reserva
+  // (montoAplicado), en vez de multiplicar la cantidad de reservas por
+  // MONTO_QUINCHO (el precio ACTUAL), que cobraria de mas o de menos a
+  // reservas hechas antes de un cambio de precio.
   const reservasPendientes = await prisma.reserva.findMany({
     where: {
       estado: "CONFIRMADA",
       cargoId: null,
       fecha: { gte: params.fechaInicio, lte: params.fechaFin },
     },
-    select: { id: true, unidadId: true },
+    select: { id: true, unidadId: true, montoAplicado: true },
   });
-  const quinchoPorUnidad = new Map<string, string[]>();
+  const quinchoPorUnidad = new Map<string, { reservaIds: string[]; monto: number }>();
   for (const r of reservasPendientes) {
-    const lista = quinchoPorUnidad.get(r.unidadId) ?? [];
-    lista.push(r.id);
-    quinchoPorUnidad.set(r.unidadId, lista);
+    const actual = quinchoPorUnidad.get(r.unidadId) ?? { reservaIds: [], monto: 0 };
+    actual.reservaIds.push(r.id);
+    actual.monto += r.montoAplicado;
+    quinchoPorUnidad.set(r.unidadId, actual);
   }
 
   // Saldo anterior de cada unidad: se trae UNA sola consulta con todos los
@@ -187,8 +194,9 @@ export async function crearPeriodoYCalcular(params: {
     const gastoComun = totalGastos * unidad.coeficiente;
     const cochera = cocheraPorUnidad.get(unidad.id) ?? 0;
     const baulera = bauleraPorUnidad.get(unidad.id) ?? 0;
-    const reservaIds = quinchoPorUnidad.get(unidad.id) ?? [];
-    const quincho = reservaIds.length * MONTO_QUINCHO;
+    const quinchoDatos = quinchoPorUnidad.get(unidad.id);
+    const reservaIds = quinchoDatos?.reservaIds ?? [];
+    const quincho = quinchoDatos?.monto ?? 0;
     const calefaccion = 0; // se completa a mano despues, es por consumo
 
     const total = gastoComun + cochera + baulera + quincho + calefaccion;
