@@ -307,6 +307,198 @@ export async function registrarPago(cargoId: string, monto: number, medio?: stri
   });
 }
 
+/**
+ * Calcula el gas (calefaccion) de un período a partir de las lecturas de
+ * medidor de agua caliente de cada unidad (incluida la pileta, marcada con
+ * Unidad.esEspacioComun = true) y de las dos facturas del período (Torre
+ * Grande y Torre Chica se facturan y reparten por separado).
+ *
+ * Por cada torre: 45% de la factura es costo fijo (repartido por %incidencia
+ * de m2GasPonderado sobre el total de esa torre) y 55% es costo variable
+ * (repartido por consumo x %incidencia, sobre la suma de esa misma cuenta
+ * de las unidades de esa torre).
+ *
+ * El resultado de la pileta no se factura a nadie directamente: se agrega
+ * como una GastoCategoria mas ("Agua caliente - espacios comunes"), que se
+ * reparte entre las 79 unidades por coeficiente, igual que EDEA u OSSE. Por
+ * eso, despues de calcular el gas, se recalculan gastoComun/cochera/baulera
+ * de todas las unidades (el total de gastos del periodo cambio).
+ */
+export async function calcularGasPeriodo(
+  periodoId: string,
+  params: {
+    facturaGasTorreGrande: number;
+    facturaGasTorreChica: number;
+    lecturas: { unidadId: string; lecturaActual: number }[];
+  }
+) {
+  await prisma.periodoExpensa.update({
+    where: { id: periodoId },
+    data: {
+      facturaGasTorreGrande: params.facturaGasTorreGrande,
+      facturaGasTorreChica: params.facturaGasTorreChica,
+    },
+  });
+
+  const periodo = await prisma.periodoExpensa.findUniqueOrThrow({ where: { id: periodoId } });
+
+  const unidades = await prisma.unidad.findMany({
+    where: { m2GasPonderado: { not: null } },
+    select: { id: true, torre: true, esEspacioComun: true, m2GasPonderado: true },
+  });
+
+  // Lectura anterior de cada unidad: la lecturaActual del periodo anterior
+  // (el mas reciente antes de este), o 0 si es la primera vez que se le
+  // toma lectura. Mismo mecanismo que el arrastre de saldoAnterior.
+  const lecturasPrevias = await prisma.lecturaGas.findMany({
+    where: { periodo: { fechaInicio: { lt: periodo.fechaInicio } } },
+    orderBy: { periodo: { fechaInicio: "desc" } },
+    select: { unidadId: true, lecturaActual: true },
+  });
+  const lecturaAnteriorPorUnidad = new Map<string, number>();
+  for (const l of lecturasPrevias) {
+    if (!lecturaAnteriorPorUnidad.has(l.unidadId)) lecturaAnteriorPorUnidad.set(l.unidadId, l.lecturaActual);
+  }
+
+  const lecturaActualPorUnidad = new Map(params.lecturas.map((l) => [l.unidadId, l.lecturaActual]));
+  const consumoPorUnidad = new Map<string, number>();
+  for (const u of unidades) {
+    const actual = lecturaActualPorUnidad.get(u.id) ?? 0;
+    const anterior = lecturaAnteriorPorUnidad.get(u.id) ?? 0;
+    consumoPorUnidad.set(u.id, actual - anterior);
+  }
+
+  await prisma.$transaction(
+    unidades.map((u) =>
+      prisma.lecturaGas.upsert({
+        where: { periodoId_unidadId: { periodoId, unidadId: u.id } },
+        create: {
+          periodoId,
+          unidadId: u.id,
+          lecturaActual: lecturaActualPorUnidad.get(u.id) ?? 0,
+          consumo: consumoPorUnidad.get(u.id) ?? 0,
+        },
+        update: {
+          lecturaActual: lecturaActualPorUnidad.get(u.id) ?? 0,
+          consumo: consumoPorUnidad.get(u.id) ?? 0,
+        },
+      })
+    )
+  );
+
+  // Costo de gas por unidad, torre por torre (cada torre con su propia
+  // factura y su propio total de m2GasPonderado/consumo, sin mezclarlas).
+  const gasPorUnidad = new Map<string, number>();
+  let costoPiscina = 0;
+
+  for (const torre of ["GRANDE", "CHICA"] as const) {
+    const deLaTorre = unidades.filter((u) => u.torre === torre);
+    const factura = torre === "GRANDE" ? params.facturaGasTorreGrande : params.facturaGasTorreChica;
+    const totalM2Ponderado = deLaTorre.reduce((acc, u) => acc + (u.m2GasPonderado ?? 0), 0);
+
+    const kPorUnidad = new Map<string, number>();
+    for (const u of deLaTorre) {
+      const incidencia = totalM2Ponderado > 0 ? (u.m2GasPonderado ?? 0) / totalM2Ponderado : 0;
+      const consumo = consumoPorUnidad.get(u.id) ?? 0;
+      kPorUnidad.set(u.id, consumo * incidencia);
+    }
+    const sumaK = [...kPorUnidad.values()].reduce((acc, k) => acc + k, 0);
+
+    for (const u of deLaTorre) {
+      const incidencia = totalM2Ponderado > 0 ? (u.m2GasPonderado ?? 0) / totalM2Ponderado : 0;
+      const fijo = factura * 0.45 * incidencia;
+      const k = kPorUnidad.get(u.id) ?? 0;
+      const variable = sumaK > 0 ? factura * 0.55 * (k / sumaK) : 0;
+      const total = fijo + variable;
+      if (u.esEspacioComun) {
+        costoPiscina += total;
+      } else {
+        gasPorUnidad.set(u.id, total);
+      }
+    }
+  }
+
+  // La pileta se agrega/actualiza como una categoria de gasto comun mas.
+  const categoriasActuales = await prisma.gastoCategoria.findMany({ where: { periodoId } });
+  const categoriaPiscina = categoriasActuales.find(
+    (g) => g.nombre.trim().toLowerCase() === "agua caliente - espacios comunes"
+  );
+  if (categoriaPiscina) {
+    await prisma.gastoCategoria.update({ where: { id: categoriaPiscina.id }, data: { monto: costoPiscina } });
+  } else {
+    await prisma.gastoCategoria.create({
+      data: {
+        periodoId,
+        nombre: "Agua caliente - espacios comunes",
+        monto: costoPiscina,
+        orden: categoriasActuales.length,
+      },
+    });
+  }
+
+  // El total de gastos del periodo cambio (se sumo/actualizo la categoria de
+  // la pileta): hay que recalcular gastoComun/cochera/baulera de las 79
+  // unidades con el nuevo total, y ahora si reemplazar calefaccion por el
+  // gas recien calculado (a diferencia de actualizarPeriodoYCalcular, que
+  // la deja intacta).
+  const categorias = await prisma.gastoCategoria.findMany({ where: { periodoId } });
+  const totalGastos = categorias.reduce((acc, c) => acc + c.monto, 0);
+  await prisma.periodoExpensa.update({ where: { id: periodoId }, data: { totalGastos } });
+
+  const { cocheraPorUnidad, bauleraPorUnidad, cocherasIndividuales, baulerasIndividuales } =
+    await calcularComplementarios(totalGastos);
+
+  const cargos = await prisma.cargoUnidadPeriodo.findMany({
+    where: { periodoId },
+    select: { id: true, unidadId: true, quincho: true, saldoAnterior: true, totalPagado: true },
+  });
+
+  await prisma.$transaction(
+    async (tx) => {
+      await Promise.all(
+        cargos.map(async (cargo) => {
+          const unidad = await tx.unidad.findUniqueOrThrow({
+            where: { id: cargo.unidadId },
+            select: { coeficiente: true },
+          });
+          const gastoComun = totalGastos * unidad.coeficiente;
+          const cochera = cocheraPorUnidad.get(cargo.unidadId) ?? 0;
+          const baulera = bauleraPorUnidad.get(cargo.unidadId) ?? 0;
+          const calefaccion = gasPorUnidad.get(cargo.unidadId) ?? 0;
+          const total = gastoComun + cochera + baulera + cargo.quincho + calefaccion;
+          const saldoActual = total + cargo.saldoAnterior - cargo.totalPagado;
+          await tx.cargoUnidadPeriodo.update({
+            where: { id: cargo.id },
+            data: { gastoComun, cochera, baulera, calefaccion, total, saldoActual },
+          });
+        })
+      );
+
+      await Promise.all(
+        cocherasIndividuales.map((c) =>
+          tx.cargoCocheraPeriodo.upsert({
+            where: { periodoId_cocheraId: { periodoId, cocheraId: c.id } },
+            create: { periodoId, cocheraId: c.id, unidadCobradaId: c.unidadCobradaId, monto: c.monto },
+            update: { unidadCobradaId: c.unidadCobradaId, monto: c.monto },
+          })
+        )
+      );
+      await Promise.all(
+        baulerasIndividuales.map((b) =>
+          tx.cargoBauleraPeriodo.upsert({
+            where: { periodoId_bauleraId: { periodoId, bauleraId: b.id } },
+            create: { periodoId, bauleraId: b.id, unidadCobradaId: b.unidadCobradaId, monto: b.monto },
+            update: { unidadCobradaId: b.unidadCobradaId, monto: b.monto },
+          })
+        )
+      );
+    },
+    { timeout: 20000 }
+  );
+
+  return { costoPiscina, totalGastos };
+}
+
 export async function actualizarCalefaccion(cargoId: string, calefaccion: number) {
   const cargo = await prisma.cargoUnidadPeriodo.findUniqueOrThrow({ where: { id: cargoId } });
   const total = cargo.gastoComun + cargo.cochera + cargo.baulera + cargo.quincho + calefaccion;
