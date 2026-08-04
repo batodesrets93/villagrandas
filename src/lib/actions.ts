@@ -219,9 +219,14 @@ export async function calcularGasAction(formData: FormData): Promise<ResultadoAc
 
     const unidadIds = formData.getAll("lecturaUnidadId") as string[];
     const lecturasActuales = formData.getAll("lecturaActual") as string[];
+    const lecturasAnterioresIniciales = formData.getAll("lecturaAnteriorInicial") as string[];
     const lecturas = unidadIds.map((unidadId, i) => ({
       unidadId,
       lecturaActual: parseMonto(lecturasActuales[i]),
+      lecturaAnteriorInicial:
+        lecturasAnterioresIniciales[i] !== undefined && lecturasAnterioresIniciales[i] !== ""
+          ? parseMonto(lecturasAnterioresIniciales[i])
+          : undefined,
     }));
 
     if (facturaGasTorreGrande <= 0 || facturaGasTorreChica <= 0) {
