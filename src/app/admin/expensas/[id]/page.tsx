@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { registrarPagoAction, actualizarCalefaccionAction } from "@/lib/actions";
 import { agruparM2ComplementariosPorUnidad, calcularTotalM2Edificio } from "@/lib/calculo";
 import EnviarEmailsButton from "@/components/EnviarEmailsButton";
+import ComprobantesGasto from "@/components/ComprobantesGasto";
 
 function money(n: number) {
   return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -20,7 +21,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
   const periodo = await prisma.periodoExpensa.findUniqueOrThrow({
     where: { id: params.id },
     include: {
-      gastos: { orderBy: { orden: "asc" } },
+      gastos: { orderBy: { orden: "asc" }, include: { comprobantes: true } },
       cargos: { include: { unidad: true, pagos: true }, orderBy: [{ unidad: { torre: "asc" } }, { unidad: { piso: "asc" } }, { unidad: { depto: "asc" } }] },
     },
   });
@@ -55,11 +56,23 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                   {g.nombre} {g.esFondoReserva && <span className="text-xs text-brand-600">(fondo de reserva)</span>}
                 </td>
                 <td className="text-right">{money(g.monto)}</td>
+                <td>
+                  <ComprobantesGasto
+                    gastoId={g.id}
+                    comprobantes={g.comprobantes.map((c) => ({
+                      id: c.id,
+                      nombreArchivo: c.nombreArchivo,
+                      tipoArchivo: c.tipoArchivo,
+                      tamanio: c.tamanio,
+                    }))}
+                  />
+                </td>
               </tr>
             ))}
             <tr className="font-bold">
               <td>Total</td>
               <td className="text-right">{money(periodo.totalGastos)}</td>
+              <td></td>
             </tr>
           </tbody>
         </table>
