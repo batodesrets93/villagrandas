@@ -337,7 +337,7 @@ export async function calcularGasPeriodo(
   params: {
     facturaGasTorreGrande: number;
     facturaGasTorreChica: number;
-    lecturas: { unidadId: string; lecturaActual: number }[];
+    lecturas: { unidadId: string; lecturaActual: number; lecturaAnteriorInicial?: number }[];
   }
 ) {
   await prisma.periodoExpensa.update({
@@ -356,23 +356,28 @@ export async function calcularGasPeriodo(
   });
 
   // Lectura anterior de cada unidad: la lecturaActual del periodo anterior
-  // (el mas reciente antes de este), o 0 si es la primera vez que se le
-  // toma lectura. Mismo mecanismo que el arrastre de saldoAnterior.
+  // (el mas reciente antes de este). Si no hay ningun periodo previo con
+  // lectura para esa unidad (primera vez que se mide), se usa la
+  // lecturaAnteriorInicial que cargo el admin a mano (o 0 si no cargo nada).
   const lecturasPrevias = await prisma.lecturaGas.findMany({
     where: { periodo: { fechaInicio: { lt: periodo.fechaInicio } } },
     orderBy: { periodo: { fechaInicio: "desc" } },
     select: { unidadId: true, lecturaActual: true },
   });
-  const lecturaAnteriorPorUnidad = new Map<string, number>();
+  const lecturaAnteriorHistoricaPorUnidad = new Map<string, number>();
   for (const l of lecturasPrevias) {
-    if (!lecturaAnteriorPorUnidad.has(l.unidadId)) lecturaAnteriorPorUnidad.set(l.unidadId, l.lecturaActual);
+    if (!lecturaAnteriorHistoricaPorUnidad.has(l.unidadId)) lecturaAnteriorHistoricaPorUnidad.set(l.unidadId, l.lecturaActual);
   }
+  const lecturaAnteriorInicialPorUnidad = new Map(
+    params.lecturas.map((l) => [l.unidadId, l.lecturaAnteriorInicial])
+  );
 
   const lecturaActualPorUnidad = new Map(params.lecturas.map((l) => [l.unidadId, l.lecturaActual]));
   const consumoPorUnidad = new Map<string, number>();
   for (const u of unidades) {
     const actual = lecturaActualPorUnidad.get(u.id) ?? 0;
-    const anterior = lecturaAnteriorPorUnidad.get(u.id) ?? 0;
+    const anterior =
+      lecturaAnteriorHistoricaPorUnidad.get(u.id) ?? lecturaAnteriorInicialPorUnidad.get(u.id) ?? 0;
     consumoPorUnidad.set(u.id, actual - anterior);
   }
 
