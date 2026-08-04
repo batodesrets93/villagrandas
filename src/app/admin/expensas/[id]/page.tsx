@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { registrarPagoAction, actualizarCalefaccionAction } from "@/lib/actions";
 import { agruparM2ComplementariosPorUnidad, calcularTotalM2Edificio } from "@/lib/calculo";
@@ -43,7 +44,12 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
             {periodo.vencimiento.toLocaleDateString("es-AR")}
           </p>
         </div>
-        <EnviarEmailsButton periodoId={periodo.id} etiqueta={periodo.etiqueta} />
+        <div className="flex items-center gap-2">
+          <Link href={`/admin/expensas/${periodo.id}/gas`} className="btn btn-secondary text-sm">
+            Calcular gas / calefacción
+          </Link>
+          <EnviarEmailsButton periodoId={periodo.id} etiqueta={periodo.etiqueta} />
+        </div>
       </div>
 
       <div className="card">
@@ -124,16 +130,20 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                 </td>
                 <td>{money(c.quincho)}</td>
                 <td>
-                  <form action={actualizarCalefaccionAction} className="flex gap-1">
-                    <input type="hidden" name="cargoId" value={c.id} />
-                    <input
-                      name="calefaccion"
-                      defaultValue={c.calefaccion || ""}
-                      placeholder="0"
-                      className="w-20 text-xs"
-                    />
-                    <button className="btn btn-secondary text-xs px-2">OK</button>
-                  </form>
+                  {money(c.calefaccion)}
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-xs text-gray-400">Ajuste manual</summary>
+                    <form action={actualizarCalefaccionAction} className="flex gap-1 mt-1">
+                      <input type="hidden" name="cargoId" value={c.id} />
+                      <input
+                        name="calefaccion"
+                        defaultValue={c.calefaccion || ""}
+                        placeholder="0"
+                        className="w-20 text-xs"
+                      />
+                      <button className="btn btn-secondary text-xs px-2">OK</button>
+                    </form>
+                  </details>
                 </td>
                 <td className="font-medium">{money(c.total)}</td>
                 <td>{money(c.saldoAnterior)}</td>
