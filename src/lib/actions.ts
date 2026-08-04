@@ -13,6 +13,7 @@ import {
   actualizarCalefaccion,
   calcularTotalM2Edificio,
   agruparM2ComplementariosPorUnidad,
+  calcularGasPeriodo,
   MONTO_QUINCHO,
 } from "@/lib/calculo";
 import { generarPdfLiquidacion } from "@/lib/pdf";
@@ -200,6 +201,45 @@ export async function actualizarCalefaccionAction(formData: FormData): Promise<v
     revalidatePath("/admin/expensas");
   } catch (e) {
     console.error("[actualizarCalefaccionAction] Error inesperado:", e);
+  }
+}
+
+// Calcula el gas/calefacción del período a partir de las 2 facturas (Torre
+// Grande y Torre Chica) y la lectura actual de cada medidor, y reemplaza la
+// calefacción de cada unidad por el monto calculado (ver calcularGasPeriodo
+// en calculo.ts). Las lecturas llegan como 2 arrays paralelos: la posición i
+// de "lecturaUnidadId" corresponde a la posición i de "lecturaActual".
+export async function calcularGasAction(formData: FormData): Promise<ResultadoAccion<{ id: string }>> {
+  try {
+    await requireAdmin();
+
+    const periodoId = String(formData.get("periodoId"));
+    const facturaGasTorreGrande = parseMonto(String(formData.get("facturaGasTorreGrande")));
+    const facturaGasTorreChica = parseMonto(String(formData.get("facturaGasTorreChica")));
+
+    const unidadIds = formData.getAll("lecturaUnidadId") as string[];
+    const lecturasActuales = formData.getAll("lecturaActual") as string[];
+    const lecturas = unidadIds.map((unidadId, i) => ({
+      unidadId,
+      lecturaActual: parseMonto(lecturasActuales[i]),
+    }));
+
+    if (facturaGasTorreGrande <= 0 || facturaGasTorreChica <= 0) {
+      return { ok: false, error: "Ingresá el monto de las dos facturas de gas (Torre Grande y Torre Chica)." };
+    }
+
+    await calcularGasPeriodo(periodoId, { facturaGasTorreGrande, facturaGasTorreChica, lecturas });
+
+    revalidatePath(`/admin/expensas/${periodoId}`);
+    revalidatePath(`/admin/expensas/${periodoId}/gas`);
+    return { ok: true, data: { id: periodoId } };
+  } catch (e) {
+    console.error("[calcularGasAction] Error inesperado:", e);
+    return {
+      ok: false,
+      error:
+        "No se pudo calcular el gas por un error inesperado en el servidor. Probá de nuevo en un minuto; si se repite, revisá los logs de Vercel (pestaña Logs del proyecto) para ver el detalle.",
+    };
   }
 }
 
