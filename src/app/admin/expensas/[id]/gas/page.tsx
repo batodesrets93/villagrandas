@@ -41,6 +41,7 @@ export default async function GasPeriodoPage({ params }: { params: { id: string 
     titular: u.titular,
     esEspacioComun: u.esEspacioComun,
     lecturaAnterior: lecturaAnteriorPorUnidad.get(u.id) ?? 0,
+    lecturaAnteriorTieneHistorial: lecturaAnteriorPorUnidad.has(u.id),
     lecturaActualPrevia: lecturaActualPorUnidad.get(u.id) ?? null,
   }));
 
@@ -49,10 +50,12 @@ export default async function GasPeriodoPage({ params }: { params: { id: string 
       <div>
         <h1 className="text-2xl font-bold text-brand-700">Gas / calefacción — {periodo.etiqueta}</h1>
         <p className="text-sm text-gray-500">
-          Cargá las dos facturas de gas del período y la lectura actual del medidor de cada unidad. El sistema
-          calcula el consumo (lectura actual − lectura anterior) y reparte cada factura 45% fijo / 55% variable por
-          consumo, separando Torre Grande de Torre Chica. La pileta entra al cálculo pero su costo se suma como
-          gasto común, no se le factura a nadie directamente.
+          Cargá las dos facturas de gas del período y la lectura actual del medidor de cada unidad (podés hacerlo
+          acá o exportar a Excel, completarlo y volver a importarlo). El sistema calcula el consumo (lectura actual
+          − lectura anterior) y reparte cada factura 45% fijo / 55% variable por consumo, separando Torre Grande de
+          Torre Chica. Si es la primera vez que se le toma lectura a una unidad, vas a poder cargar también su
+          lectura anterior. La pileta entra al cálculo pero su costo se suma como gasto común, no se le factura a
+          nadie directamente.
         </p>
       </div>
 
