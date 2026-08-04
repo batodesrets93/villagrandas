@@ -74,12 +74,24 @@ model Unidad {
   // que no le sume gasto comun a nadie, solo absorbe cochera/baulera.
   esConsolidadaCocheraBaulera Boolean  @default(false)
 
+  // m2 ponderado especifico para el calculo de gas (hoja "AGUA CALIENTE-ACELF"
+  // del excel: columna E+F+G). Es distinto del m2 real de la unidad. La
+  // pileta tambien usa este campo (con esEspacioComun = true) para poder
+  // entrar al mismo calculo sin ser un departamento real.
+  m2GasPonderado Float?
+  // Marca la "unidad" ficticia de la pileta (Torre Grande). No tiene
+  // titular real: solo entra al calculo de %incidencia de gas y a la
+  // lectura de su propio medidor. Su costo de gas no se le factura a
+  // nadie directamente, se agrega como una categoria de gasto comun mas.
+  esEspacioComun Boolean @default(false)
+
   usuarios     Usuario[]
   cargos       CargoUnidadPeriodo[]
   reservas     Reserva[]
   reclamos     Reclamo[]
   cocheras     Cochera[]
   bauleras     Baulera[]
+  lecturasGas  LecturaGas[]
 
   @@unique([torre, piso, depto])
 }
@@ -131,10 +143,34 @@ model PeriodoExpensa {
   cerrado     Boolean   @default(false)
   createdAt   DateTime  @default(now())
 
+  // Totales de las dos facturas de gas del periodo (Torre Grande y Torre
+  // Chica se facturan por separado). Se usan para el calculo de calefaccion
+  // por unidad (ver LecturaGas y calcularGas en calculo.ts).
+  facturaGasTorreGrande Float?
+  facturaGasTorreChica  Float?
+
   gastos      GastoCategoria[]
   cargos      CargoUnidadPeriodo[]
   cargosCochera CargoCocheraPeriodo[]
   cargosBaulera CargoBauleraPeriodo[]
+  lecturasGas LecturaGas[]
+}
+
+// Una lectura de medidor de agua caliente por unidad y por periodo (incluye
+// la pileta, marcada con Unidad.esEspacioComun = true). La lectura anterior
+// no se guarda aca: se toma de la lecturaActual del periodo anterior de esa
+// misma unidad (mismo mecanismo que el arrastre de saldoAnterior).
+model LecturaGas {
+  id            String         @id @default(cuid())
+  periodoId     String
+  periodo       PeriodoExpensa @relation(fields: [periodoId], references: [id], onDelete: Cascade)
+  unidadId      String
+  unidad        Unidad         @relation(fields: [unidadId], references: [id])
+  lecturaActual Float
+  consumo       Float
+  createdAt     DateTime       @default(now())
+
+  @@unique([periodoId, unidadId])
 }
 
 model GastoCategoria {
