@@ -381,6 +381,10 @@ export async function calcularGasPeriodo(
     consumoPorUnidad.set(u.id, actual - anterior);
   }
 
+  // NOTA: se le agrega timeout/maxWait explícitos, igual que al resto de las
+  // transacciones de este archivo. Sin esto, Prisma usa el default de 5000ms,
+  // que con ~79 upserts secuenciales contra Supabase se puede quedar corto y
+  // tirar un error de timeout de transacción (P2028) a mitad de camino.
   await prisma.$transaction(
     unidades.map((u) =>
       prisma.lecturaGas.upsert({
@@ -396,7 +400,8 @@ export async function calcularGasPeriodo(
           consumo: consumoPorUnidad.get(u.id) ?? 0,
         },
       })
-    )
+    ),
+    { timeout: 20000, maxWait: 10000 }
   );
 
   // Costo de gas por unidad, torre por torre (cada torre con su propia
