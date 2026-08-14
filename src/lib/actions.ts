@@ -19,6 +19,21 @@ import {
 import { generarPdfLiquidacion } from "@/lib/pdf";
 import { enviarLiquidacionPorEmail, enviarRespuestaReclamoPorEmail } from "@/lib/email";
 
+// Extrae un detalle legible de cualquier error atrapado, para poder
+// mostrarlo en pantalla. Los errores de Prisma (PrismaClientKnownRequestError,
+// PrismaClientValidationError, etc.) tienen "code" y "message"; los errores
+// comunes de JS solo tienen "message". Si no se puede extraer nada útil, no
+// se agrega nada al texto (mejor un mensaje genérico que uno vacío/raro).
+function detalleError(e: unknown): string {
+  if (e && typeof e === "object") {
+    const code = "code" in e ? String((e as { code: unknown }).code) : undefined;
+    const message = "message" in e ? String((e as { message: unknown }).message) : undefined;
+    if (code && message) return `${code}: ${message}`;
+    if (message) return message;
+  }
+  return String(e);
+}
+
 /**
  * Interpreta un monto escrito a mano, aceptando cualquiera de estas formas:
  *   1801246.07   (punto como decimal, sin separador de miles)
@@ -243,7 +258,8 @@ export async function calcularGasAction(formData: FormData): Promise<ResultadoAc
     return {
       ok: false,
       error:
-        "No se pudo calcular el gas por un error inesperado en el servidor. Probá de nuevo en un minuto; si se repite, revisá los logs de Vercel (pestaña Logs del proyecto) para ver el detalle.",
+        "No se pudo calcular el gas por un error inesperado en el servidor. Probá de nuevo en un minuto; si se repite, revisá los logs de Vercel (pestaña Logs del proyecto) para ver el detalle. " +
+        `Detalle: ${detalleError(e)}`,
     };
   }
 }
