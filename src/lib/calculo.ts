@@ -519,7 +519,13 @@ export async function calcularGasPeriodo(
         )
       );
     },
-    { timeout: 20000 }
+    // NOTA: igual que en la transacción de arriba (lecturaGas), esta también
+    // hace ~79 updates de cargos más los upserts de cocheras/bauleras
+    // individuales, así que necesita maxWait explícito además de timeout;
+    // el default de maxWait de Prisma (2000ms) puede quedarse corto contra
+    // el pooler de Supabase y tirar un error de timeout de transacción
+    // (P2028) a mitad de camino.
+    { timeout: 20000, maxWait: 10000 }
   );
 
   return { costoPiscina, totalGastos };
