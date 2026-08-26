@@ -6,6 +6,8 @@ html, body {
   background-color: #f7f8f7;
   overflow-x: hidden;
   max-width: 100vw;
+  width: 100%;
+  overscroll-behavior-x: none;
 }
 
 .card {
