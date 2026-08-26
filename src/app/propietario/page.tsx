@@ -142,15 +142,3 @@ export default async function PropietarioPage() {
                           </li>
                         ))}
                     </ul>
-                  </details>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <CambiarPasswordForm />
-    </div>
-  );
-}
