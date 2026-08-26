@@ -3,10 +3,22 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import CambiarPasswordForm from "@/components/CambiarPasswordForm";
 import DescargarPdfButton from "@/components/DescargarPdfButton";
+import InformarPagoForm from "@/components/InformarPagoForm";
 
 function money(n: number) {
   return "$\u00A0" + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+const ESTADO_PAGO_LABEL: Record<string, string> = {
+  PENDIENTE: "Pendiente de revisión",
+  CONFIRMADO: "Confirmado",
+  RECHAZADO: "Rechazado",
+};
+const ESTADO_PAGO_COLOR: Record<string, string> = {
+  PENDIENTE: "text-amber-600",
+  CONFIRMADO: "text-brand-600",
+  RECHAZADO: "text-red-600",
+};
 
 export default async function PropietarioPage() {
   const session = await getServerSession(authOptions);
@@ -31,6 +43,10 @@ export default async function PropietarioPage() {
         },
       },
       pagos: { orderBy: { fecha: "desc" } },
+      pagosInformados: {
+        orderBy: { createdAt: "desc" },
+        include: { comprobantes: { select: { id: true, nombreArchivo: true } } },
+      },
     },
     orderBy: { periodo: { fechaInicio: "desc" } },
   });
@@ -140,6 +156,52 @@ export default async function PropietarioPage() {
                           </li>
                         ))}
                     </ul>
+                  </details>
+                )}
+
+                {c.pagosInformados.length > 0 && (
+                  <details>
+                    <summary className="cursor-pointer text-brand-600 underline">
+                      {c.pagosInformados.length === 1 ? "1 pago informado" : `${c.pagosInformados.length} pagos informados`}
+                    </summary>
+                    <ul className="mt-2 space-y-2">
+                      {c.pagosInformados.map((p) => (
+                        <li key={p.id} className="border-t border-gray-50 pt-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span>
+                              {money(p.monto)} · {p.fecha.toLocaleDateString("es-AR")}
+                              {p.medio && ` · ${p.medio}`}
+                            </span>
+                            <span className={`font-medium ${ESTADO_PAGO_COLOR[p.estado]}`}>
+                              {ESTADO_PAGO_LABEL[p.estado]}
+                            </span>
+                          </div>
+                          {p.estado === "RECHAZADO" && p.notaAdmin && (
+                            <p className="text-gray-400 mt-0.5">Motivo: {p.notaAdmin}</p>
+                          )}
+                          <ul className="ml-2 mt-0.5">
+                            {p.comprobantes.map((comp) => (
+                              <li key={comp.id}>
+                                <a
+                                  href={`/api/pagos-informados-adjuntos/${comp.id}`}
+                                  target="_blank"
+                                  className="text-brand-600 underline"
+                                >
+                                  {comp.nombreArchivo}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+
+                {c.saldoActual > 0 && (
+                  <details>
+                    <summary className="cursor-pointer text-brand-600 underline">Informar pago</summary>
+                    <InformarPagoForm cargoId={c.id} />
                   </details>
                 )}
               </div>
