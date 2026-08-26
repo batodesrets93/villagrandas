@@ -26,15 +26,18 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-4 relative bg-cover bg-center"
-      style={{ backgroundImage: "url(/hero-pool.jpg)" }}
-    >
-      {/* Overlay oscuro para que el texto quede legible sobre la foto */}
-      <div className="absolute inset-0 bg-black/55" />
-
-      <div className="relative z-10 w-full max-w-sm">
-        <div className="text-center mb-6">
+    <div className="min-h-screen flex flex-col" style={{ background: "#1c4534" }}>
+      {/* Foto en una franja de altura fija (no toda la pantalla): la imagen es
+          casi cuadrada, y si se la fuerza a cubrir un min-h-screen angosto y
+          alto (celular) se agranda tanto que el texto grabado queda cortado
+          en los bordes. Limitando la altura, bg-cover no necesita escalar
+          tanto y el texto entra completo. */}
+      <div
+        className="relative w-full h-[34vh] min-h-[240px] max-h-[380px] bg-cover bg-center flex items-end justify-center pb-6"
+        style={{ backgroundImage: "url(/hero-pool.jpg)" }}
+      >
+        <div className="absolute inset-0 bg-black/45" />
+        <div className="relative z-10 text-center px-4">
           <p
             className="text-xs tracking-[0.3em] text-white/90 uppercase mb-1"
             style={{ textShadow: "0 2px 6px rgba(0,0,0,0.6)" }}
@@ -48,23 +51,27 @@ export default function LoginPage() {
             Villa Grandas
           </h1>
         </div>
+      </div>
 
-        <div className="bg-white/95 backdrop-blur rounded-2xl shadow-xl p-6">
-          <p className="text-sm text-gray-500 mb-6 text-center">Ingresá con tu email y contraseña</p>
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div>
-              <label className="text-sm font-medium block mb-1">Email</label>
-              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-sm font-medium block mb-1">Contraseña</label>
-              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-            </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <button type="submit" disabled={cargando} className="btn btn-primary w-full">
-              {cargando ? "Ingresando..." : "Ingresar"}
-            </button>
-          </form>
+      <div className="flex-1 flex items-center justify-center px-4 py-8">
+        <div className="relative z-10 w-full max-w-sm">
+          <div className="bg-white/95 backdrop-blur rounded-2xl shadow-xl p-6">
+            <p className="text-sm text-gray-500 mb-6 text-center">Ingresá con tu email y contraseña</p>
+            <form onSubmit={onSubmit} className="space-y-4">
+              <div>
+                <label className="text-sm font-medium block mb-1">Email</label>
+                <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-1">Contraseña</label>
+                <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+              </div>
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              <button type="submit" disabled={cargando} className="btn btn-primary w-full">
+                {cargando ? "Ingresando..." : "Ingresar"}
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>
