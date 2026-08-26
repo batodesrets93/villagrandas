@@ -524,6 +524,85 @@ export async function marcarDesarrolladorAction(formData: FormData) {
   revalidatePath("/admin");
 }
 
+/**
+ * Cambia el titular (nombre del dueño) de una unidad. No toca los accesos
+ * (usuarios/emails): eso se maneja aparte, con crearAccesoPropietarioAction,
+ * editarAccesoAction y cambiarEstadoAccesoAction. Se usa, por ejemplo,
+ * cuando se vende un depto y hay que actualizar quién figura como dueño.
+ */
+export async function actualizarTitularAction(formData: FormData) {
+  await requireAdmin();
+  const unidadId = String(formData.get("unidadId"));
+  const titular = String(formData.get("titular")).trim();
+
+  if (!titular) {
+    throw new Error("El nombre del titular no puede quedar vacío.");
+  }
+
+  await prisma.unidad.update({
+    where: { id: unidadId },
+    data: { titular },
+  });
+
+  revalidatePath("/admin/unidades");
+  revalidatePath(`/admin/unidades/${unidadId}`);
+}
+
+/**
+ * Edita un acceso ya existente (nombre, email, y opcionalmente contraseña).
+ * A diferencia de crearAccesoPropietarioAction (que hace upsert por email),
+ * esta busca al usuario por id, asi que puede cambiarle el email sin
+ * confundirlo con otro usuario. Si el email nuevo ya esta en uso por otro
+ * acceso, Prisma tira un error de restriccion unica que se propaga como
+ * mensaje legible.
+ */
+export async function editarAccesoAction(formData: FormData) {
+  await requireAdmin();
+  const usuarioId = String(formData.get("usuarioId"));
+  const nombre = String(formData.get("nombre")).trim();
+  const email = String(formData.get("email")).toLowerCase().trim();
+  const password = String(formData.get("password") ?? "");
+
+  if (!nombre || !email) {
+    throw new Error("Nombre y email son obligatorios.");
+  }
+  if (password && password.length < 6) {
+    throw new Error("La contraseña nueva debe tener al menos 6 caracteres.");
+  }
+
+  const data: { nombre: string; email: string; passwordHash?: string } = { nombre, email };
+  if (password) {
+    data.passwordHash = await bcrypt.hash(password, 10);
+  }
+
+  try {
+    await prisma.usuario.update({ where: { id: usuarioId }, data });
+  } catch (e) {
+    if (e && typeof e === "object" && "code" in e && (e as { code: unknown }).code === "P2002") {
+      throw new Error("Ese email ya está en uso por otro acceso.");
+    }
+    throw e;
+  }
+
+  revalidatePath("/admin/unidades");
+}
+
+/**
+ * Revoca o reactiva un acceso (campo Usuario.activo). Revocar bloquea el
+ * login sin borrar al usuario, para no perder su historial de reclamos y
+ * reservas. Se usa, por ejemplo, para dar de baja al dueño viejo cuando se
+ * vende un depto, manteniendo el acceso nuevo del comprador.
+ */
+export async function cambiarEstadoAccesoAction(formData: FormData) {
+  await requireAdmin();
+  const usuarioId = String(formData.get("usuarioId"));
+  const activo = String(formData.get("activo")) === "true";
+
+  await prisma.usuario.update({ where: { id: usuarioId }, data: { activo } });
+
+  revalidatePath("/admin/unidades");
+}
+
 // ---------- ADMIN: cocheras y bauleras ----------
 
 /**
