@@ -10,6 +10,8 @@ import {
   crearPeriodoYCalcular,
   actualizarPeriodoYCalcular,
   registrarPago,
+  confirmarPagoInformado,
+  rechazarPagoInformado,
   actualizarCalefaccion,
   calcularTotalM2Edificio,
   agruparM2ComplementariosPorUnidad,
@@ -21,6 +23,7 @@ import {
   enviarLiquidacionPorEmail,
   enviarRespuestaReclamoPorEmail,
   enviarBienvenidaAccesoPorEmail,
+  enviarAvisoPagoInformadoPorEmail,
 } from "@/lib/email";
 
 // Extrae un detalle legible de cualquier error atrapado, para poder
@@ -735,6 +738,158 @@ export async function cancelarReservaAction(formData: FormData) {
   await prisma.reserva.update({ where: { id: reservaId }, data: { estado: "CANCELADA" } });
   revalidatePath("/propietario/reservas");
   revalidatePath("/admin/reservas");
+}
+
+// ---------- PAGOS INFORMADOS ----------
+
+const TIPOS_ADJUNTO_PAGO_PERMITIDOS = ["application/pdf", "image/jpeg", "image/jpg", "image/png", "image/webp"];
+const TAMANIO_MAXIMO_ADJUNTO_PAGO = 8 * 1024 * 1024; // 8 MB
+const MAX_ADJUNTOS_PAGO = 5;
+
+// El propietario informa un pago (con uno o más comprobantes) para un cargo
+// (liquidación) puntual. Queda en estado PENDIENTE: todavía NO se descuenta
+// del saldo, eso pasa recién cuando el admin lo confirma (ver
+// confirmarPagoInformadoAction) después de verlo acreditado en la cuenta del
+// edificio.
+export async function informarPagoAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    const session = await requirePropietario();
+    const cargoId = String(formData.get("cargoId"));
+    const monto = parseMonto(String(formData.get("monto")));
+    const fechaRaw = String(formData.get("fecha") || "");
+    const medio = String(formData.get("medio") || "").trim();
+    const nota = String(formData.get("nota") || "").trim();
+
+    if (!cargoId) {
+      return { ok: false, error: "No se encontró la liquidación correspondiente." };
+    }
+    if (!monto || monto <= 0) {
+      return { ok: false, error: "Ingresá el monto que pagaste." };
+    }
+    const fecha = fechaRaw ? new Date(fechaRaw) : new Date();
+    if (isNaN(fecha.getTime())) {
+      return { ok: false, error: "La fecha del pago no es válida." };
+    }
+
+    // El cargo tiene que pertenecer a la propia unidad del propietario
+    // logueado (nunca confiar en el cargoId que llega del form sin
+    // verificarlo contra la sesión).
+    const cargo = await prisma.cargoUnidadPeriodo.findUnique({
+      where: { id: cargoId },
+      select: { unidadId: true },
+    });
+    if (!cargo || cargo.unidadId !== session.user.unidadId) {
+      return { ok: false, error: "No autorizado." };
+    }
+
+    const archivos = formData
+      .getAll("archivos")
+      .filter((a): a is File => a instanceof File && a.size > 0);
+
+    if (archivos.length === 0) {
+      return { ok: false, error: "Adjuntá al menos un comprobante." };
+    }
+    if (archivos.length > MAX_ADJUNTOS_PAGO) {
+      return { ok: false, error: `Podés adjuntar hasta ${MAX_ADJUNTOS_PAGO} archivos.` };
+    }
+    for (const archivo of archivos) {
+      if (!TIPOS_ADJUNTO_PAGO_PERMITIDOS.includes(archivo.type)) {
+        return { ok: false, error: `${archivo.name}: solo se aceptan archivos PDF, JPG, PNG o WEBP.` };
+      }
+      if (archivo.size > TAMANIO_MAXIMO_ADJUNTO_PAGO) {
+        return { ok: false, error: `${archivo.name}: el archivo no puede superar los 8 MB.` };
+      }
+    }
+
+    const pagoInformado = await prisma.pagoInformado.create({
+      data: { cargoId, monto, fecha, medio: medio || null, nota: nota || null },
+    });
+
+    for (const archivo of archivos) {
+      const buffer = Buffer.from(await archivo.arrayBuffer());
+      await prisma.comprobantePagoInformado.create({
+        data: {
+          pagoInformadoId: pagoInformado.id,
+          nombreArchivo: archivo.name || "comprobante",
+          tipoArchivo: archivo.type,
+          tamanio: archivo.size,
+          datos: buffer,
+        },
+      });
+    }
+
+    revalidatePath("/propietario");
+    revalidatePath("/admin/pagos-informados");
+
+    try {
+      const [unidad, admins] = await Promise.all([
+        prisma.unidad.findUnique({ where: { id: session.user.unidadId! } }),
+        prisma.usuario.findMany({ where: { rol: "ADMIN", activo: true }, select: { email: true } }),
+      ]);
+      if (unidad && admins.length > 0) {
+        await enviarAvisoPagoInformadoPorEmail({
+          to: admins.map((a) => a.email),
+          unidadLabel: `${unidad.torre === "GRANDE" ? "Torre Grande" : "Torre Chica"} - Piso ${unidad.piso} Depto ${unidad.depto}`,
+          monto,
+        });
+      }
+    } catch (e) {
+      // No bloqueamos el informe de pago si falla el email de aviso al admin.
+      console.error("[informarPagoAction] No se pudo enviar el email de aviso:", e);
+    }
+
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[informarPagoAction] Error inesperado:", e);
+    return {
+      ok: false,
+      error: "No se pudo informar el pago por un error inesperado. Probá de nuevo en un minuto.",
+    };
+  }
+}
+
+// El admin confirma un pago informado DESPUÉS de verlo acreditado en la
+// cuenta del edificio: recién ahí se crea el Pago real y se descuenta del
+// saldo del propietario (ver confirmarPagoInformado en calculo.ts). El medio
+// se puede ajustar acá (ej: el propietario tildó "Transferencia" pero en
+// realidad pagó en mano y el admin lo corrige a "Efectivo").
+export async function confirmarPagoInformadoAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    await requireAdmin();
+    const id = String(formData.get("id"));
+    const medio = String(formData.get("medio") || "").trim();
+    if (!id) return { ok: false, error: "No se encontró el pago informado." };
+
+    await confirmarPagoInformado(id, { medio: medio || undefined });
+
+    revalidatePath("/admin/pagos-informados");
+    revalidatePath("/admin/expensas");
+    revalidatePath("/propietario");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[confirmarPagoInformadoAction] Error inesperado:", e);
+    return { ok: false, error: detalleError(e) };
+  }
+}
+
+// El admin rechaza un pago informado (ej: no aparece en la cuenta, el monto
+// no coincide). No se toca el saldo del propietario ni se crea ningún Pago.
+export async function rechazarPagoInformadoAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    await requireAdmin();
+    const id = String(formData.get("id"));
+    const notaAdmin = String(formData.get("notaAdmin") || "").trim();
+    if (!id) return { ok: false, error: "No se encontró el pago informado." };
+
+    await rechazarPagoInformado(id, notaAdmin || undefined);
+
+    revalidatePath("/admin/pagos-informados");
+    revalidatePath("/propietario");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[rechazarPagoInformadoAction] Error inesperado:", e);
+    return { ok: false, error: detalleError(e) };
+  }
 }
 
 // ---------- RECLAMOS ----------
