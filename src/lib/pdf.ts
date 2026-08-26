@@ -114,14 +114,40 @@ class Lienzo {
   }
 }
 
+/**
+ * Agrupa gastos con el mismo nombre (misma categoría cargada en varias facturas)
+ * en un solo renglón, sumando los montos. Mantiene el orden de primera aparición.
+ * Los gastos de fondo de reserva se agrupan aparte de los que no lo son, aunque
+ * compartan nombre, para no mezclar conceptos distintos.
+ */
+function agruparGastosPorNombre(gastos: GastoCategoriaDatos[]): GastoCategoriaDatos[] {
+  const orden: string[] = [];
+  const acumulado = new Map<string, GastoCategoriaDatos>();
+
+  for (const g of gastos) {
+    const clave = g.nombre + (g.esFondoReserva ? "__fondo" : "");
+    const existente = acumulado.get(clave);
+    if (existente) {
+      existente.monto += g.monto;
+    } else {
+      acumulado.set(clave, { ...g });
+      orden.push(clave);
+    }
+  }
+
+  return orden.map((clave) => acumulado.get(clave)!);
+}
+
 export async function generarPdfLiquidacion(
   unidad: UnidadDatos,
   periodo: PeriodoDatos,
   cargo: CargoConDatos,
   totalM2Edificio: number,
-  gastosPeriodo: GastoCategoriaDatos[] = [],
+  gastosPeriodoSinAgrupar: GastoCategoriaDatos[] = [],
   totalGastosPeriodo: number = 0
 ) {
+  const gastosPeriodo = agruparGastosPorNombre(gastosPeriodoSinAgrupar);
+
   const doc = await PDFDocument.create();
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -163,7 +189,18 @@ export async function generarPdfLiquidacion(
   }
 
   // ---------- Sección 2: liquidación / volante de pago de la unidad ----------
-  c.asegurarEspacio(90);
+  // Reservamos el espacio de la sección completa (encabezado + hasta 5 conceptos +
+  // totales + total a pagar) para que, si no entra, arranque entera en página nueva
+  // en vez de cortarse a la mitad.
+  const filasConValor = [
+    cargo.gastoComun,
+    cargo.cochera,
+    cargo.baulera,
+    cargo.quincho,
+    cargo.calefaccion,
+  ].filter((v) => v !== 0).length;
+  const altoSeccionUnidad = 20 + 16 + 16 + 30 + 22 + filasConValor * 18 + 6 + 20 + 18 * 3 + 6 + 24 + 60;
+  c.asegurarEspacio(altoSeccionUnidad);
   c.texto("Tu liquidación", { size: 12, bold: true, color: VERDE });
   c.y -= 20;
 
