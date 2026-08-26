@@ -5,6 +5,7 @@ import { cambiarPasswordAction } from "@/lib/actions";
 
 export default function CambiarPasswordForm() {
   const formRef = useRef<HTMLFormElement>(null);
+  const [abierto, setAbierto] = useState(false);
   const [error, setError] = useState("");
   const [ok, setOk] = useState(false);
   const [cargando, setCargando] = useState(false);
@@ -28,9 +29,36 @@ export default function CambiarPasswordForm() {
     }
   }
 
+  if (!abierto) {
+    return (
+      <div className="text-center">
+        <button
+          type="button"
+          onClick={() => setAbierto(true)}
+          className="text-xs text-gray-400 hover:text-brand-600 underline underline-offset-2"
+        >
+          Actualizar contraseña
+        </button>
+      </div>
+    );
+  }
+
   return (
     <form ref={formRef} action={onSubmit} className="card space-y-3">
-      <h2 className="font-semibold">Cambiar contraseña</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold">Cambiar contraseña</h2>
+        <button
+          type="button"
+          onClick={() => {
+            setAbierto(false);
+            setError("");
+            setOk(false);
+          }}
+          className="text-xs text-gray-400 hover:text-gray-600"
+        >
+          Cancelar
+        </button>
+      </div>
       <input
         name="passwordActual"
         type="password"
