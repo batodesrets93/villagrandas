@@ -68,6 +68,37 @@ export async function enviarBienvenidaAccesoPorEmail(opts: {
   });
 }
 
+/**
+ * Aviso a los admins cuando un propietario informa un pago desde la app
+ * (con comprobante adjunto), para que lo revisen y lo confirmen o rechacen
+ * en /admin/pagos-informados. Se manda a todos los usuarios con rol ADMIN
+ * activos (no a un email fijo), para no depender de que sea siempre el
+ * mismo admin el que lo vea.
+ */
+export async function enviarAvisoPagoInformadoPorEmail(opts: {
+  to: string[];
+  unidadLabel: string;
+  monto: number;
+}) {
+  if (opts.to.length === 0) return;
+  const t = getTransporter();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
+  const appUrl = process.env.NEXTAUTH_URL || "https://villagrandas.vercel.app";
+
+  await t.sendMail({
+    from,
+    to: opts.to.join(","),
+    subject: `Torres Villa Grandas - Nuevo pago informado (${opts.unidadLabel})`,
+    text:
+      `Hola,\n\n` +
+      `La unidad ${opts.unidadLabel} informó desde la app un pago de ${money(opts.monto)}, con comprobante adjunto.\n\n` +
+      `Podés revisarlo y confirmarlo (o rechazarlo si no corresponde) entrando a:\n` +
+      `${appUrl}/admin/pagos-informados\n\n` +
+      `Mientras no lo confirmes, no se descuenta del saldo del propietario.\n\n` +
+      `Administración Torres Villa Grandas`,
+  });
+}
+
 export async function enviarRespuestaReclamoPorEmail(opts: {
   to: string;
   titulo: string;
