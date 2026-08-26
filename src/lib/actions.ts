@@ -17,7 +17,11 @@ import {
   MONTO_QUINCHO,
 } from "@/lib/calculo";
 import { generarPdfLiquidacion } from "@/lib/pdf";
-import { enviarLiquidacionPorEmail, enviarRespuestaReclamoPorEmail } from "@/lib/email";
+import {
+  enviarLiquidacionPorEmail,
+  enviarRespuestaReclamoPorEmail,
+  enviarBienvenidaAccesoPorEmail,
+} from "@/lib/email";
 
 // Extrae un detalle legible de cualquier error atrapado, para poder
 // mostrarlo en pantalla. Los errores de Prisma (PrismaClientKnownRequestError,
@@ -500,6 +504,8 @@ export async function crearAccesoPropietarioAction(formData: FormData) {
     throw new Error("Email y contraseña (mínimo 6 caracteres) son obligatorios.");
   }
 
+  const existente = await prisma.usuario.findUnique({ where: { email } });
+
   const passwordHash = await bcrypt.hash(password, 10);
   await prisma.usuario.upsert({
     where: { email },
@@ -508,6 +514,27 @@ export async function crearAccesoPropietarioAction(formData: FormData) {
   });
 
   revalidatePath("/admin/unidades");
+
+  // Solo mandamos el email de bienvenida si el acceso es realmente nuevo
+  // (si ya existia, esto fue una edicion desde crearAccesoPropietarioAction
+  // -- por ejemplo, reasignar un email existente a otra unidad -- y no
+  // corresponde re-mandar las instrucciones de instalacion).
+  if (!existente) {
+    const unidad = await prisma.unidad.findUnique({
+      where: { id: unidadId },
+      select: { torre: true, piso: true, depto: true },
+    });
+    if (unidad) {
+      try {
+        await enviarBienvenidaAccesoPorEmail({ to: email, nombre, unidadLabel: unidadLabel(unidad) });
+      } catch (e) {
+        // No hacemos fallar la creacion del acceso si el email no se pudo
+        // mandar (por ejemplo, SMTP mal configurado): el acceso ya quedo
+        // creado y funciona igual, el admin puede avisarle a mano.
+        console.error("[crearAccesoPropietarioAction] No se pudo enviar el email de bienvenida:", e);
+      }
+    }
+  }
 }
 
 export async function marcarDesarrolladorAction(formData: FormData) {
