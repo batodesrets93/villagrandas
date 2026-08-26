@@ -41,7 +41,7 @@ export default async function PropietarioPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-brand-700">
-          {unidad.torre === "GRANDE" ? "Torre Grande" : "Torre Chica"}{"\u00A0\u00B7\u00A0"}Piso {unidad.piso} - Depto {unidad.depto}
+          {unidad.torre === "GRANDE" ? "Torre Grande" : "Torre Chica"}{\u00A0\u00B7\u00A0}Piso {unidad.piso} - Depto {unidad.depto}
         </h1>
         <p className="text-sm text-gray-500">{unidad.titular}</p>
       </div>
