@@ -480,54 +480,120 @@ export async function calcularGasPeriodo(
     select: { id: true, unidadId: true, quincho: true, saldoAnterior: true, totalPagado: true },
   });
 
-  await prisma.$transaction(
-    async (tx) => {
-      await Promise.all(
-        cargos.map(async (cargo) => {
-          const unidad = await tx.unidad.findUniqueOrThrow({
-            where: { id: cargo.unidadId },
-            select: { coeficiente: true },
-          });
-          const gastoComun = totalGastos * unidad.coeficiente;
-          const cochera = cocheraPorUnidad.get(cargo.unidadId) ?? 0;
-          const baulera = bauleraPorUnidad.get(cargo.unidadId) ?? 0;
-          const calefaccion = gasPorUnidad.get(cargo.unidadId) ?? 0;
-          const total = gastoComun + cochera + baulera + cargo.quincho + calefaccion;
-          const saldoActual = total + cargo.saldoAnterior - cargo.totalPagado;
-          await tx.cargoUnidadPeriodo.update({
-            where: { id: cargo.id },
-            data: { gastoComun, cochera, baulera, calefaccion, total, saldoActual },
-          });
-        })
-      );
+  // ANTES: por cada uno de los ~79 cargos se hacía un findUniqueOrThrow
+  // aparte para el coeficiente de la unidad (79 consultas más), y después
+  // 79 updates + los upserts de cocheras/bauleras, todo adentro de una
+  // misma transacción interactiva. Igual que con lecturaGas, esos ~160+
+  // viajes a la base contra el pooler de Supabase podían superar el
+  // timeout aunque estuviera en 20000ms — de ahí el "Transaction not
+  // found" (la transacción ya se había cerrado por timeout del lado del
+  // servidor cuando Prisma todavía le quería mandar más queries).
+  //
+  // AHORA: un solo findMany para los coeficientes, los cálculos se hacen
+  // en JS (sin ir a la base), y despues 3 sentencias bulk (un UPDATE con
+  // unnest para los cargos, y dos INSERT ... ON CONFLICT con unnest para
+  // cocheras/bauleras), envueltas en la forma "array" de $transaction que
+  // no tiene el problema de timeout de la forma interactiva.
+  const unidadesCoef = await prisma.unidad.findMany({
+    where: { id: { in: cargos.map((c) => c.unidadId) } },
+    select: { id: true, coeficiente: true },
+  });
+  const coeficientePorUnidad = new Map(unidadesCoef.map((u) => [u.id, u.coeficiente]));
 
-      await Promise.all(
-        cocherasIndividuales.map((c) =>
-          tx.cargoCocheraPeriodo.upsert({
-            where: { periodoId_cocheraId: { periodoId, cocheraId: c.id } },
-            create: { periodoId, cocheraId: c.id, unidadCobradaId: c.unidadCobradaId, monto: c.monto },
-            update: { unidadCobradaId: c.unidadCobradaId, monto: c.monto },
-          })
-        )
-      );
-      await Promise.all(
-        baulerasIndividuales.map((b) =>
-          tx.cargoBauleraPeriodo.upsert({
-            where: { periodoId_bauleraId: { periodoId, bauleraId: b.id } },
-            create: { periodoId, bauleraId: b.id, unidadCobradaId: b.unidadCobradaId, monto: b.monto },
-            update: { unidadCobradaId: b.unidadCobradaId, monto: b.monto },
-          })
-        )
-      );
-    },
-    // NOTA: igual que en la transacción de arriba (lecturaGas), esta también
-    // hace ~79 updates de cargos más los upserts de cocheras/bauleras
-    // individuales, así que necesita maxWait explícito además de timeout;
-    // el default de maxWait de Prisma (2000ms) puede quedarse corto contra
-    // el pooler de Supabase y tirar un error de timeout de transacción
-    // (P2028) a mitad de camino.
-    { timeout: 20000, maxWait: 10000 }
-  );
+  const cargoIds: string[] = [];
+  const gastoComunes: number[] = [];
+  const cocheraMontos: number[] = [];
+  const bauleraMontos: number[] = [];
+  const calefacciones: number[] = [];
+  const totales: number[] = [];
+  const saldosActuales: number[] = [];
+
+  for (const cargo of cargos) {
+    const gastoComun = totalGastos * (coeficientePorUnidad.get(cargo.unidadId) ?? 0);
+    const cochera = cocheraPorUnidad.get(cargo.unidadId) ?? 0;
+    const baulera = bauleraPorUnidad.get(cargo.unidadId) ?? 0;
+    const calefaccion = gasPorUnidad.get(cargo.unidadId) ?? 0;
+    const total = gastoComun + cochera + baulera + cargo.quincho + calefaccion;
+    const saldoActual = total + cargo.saldoAnterior - cargo.totalPagado;
+
+    cargoIds.push(cargo.id);
+    gastoComunes.push(gastoComun);
+    cocheraMontos.push(cochera);
+    bauleraMontos.push(baulera);
+    calefacciones.push(calefaccion);
+    totales.push(total);
+    saldosActuales.push(saldoActual);
+  }
+
+  const queries = [];
+
+  if (cargoIds.length > 0) {
+    queries.push(prisma.$executeRaw`
+      UPDATE "CargoUnidadPeriodo" AS c
+      SET "gastoComun" = u."gastoComun",
+          cochera = u.cochera,
+          baulera = u.baulera,
+          calefaccion = u.calefaccion,
+          total = u.total,
+          "saldoActual" = u."saldoActual"
+      FROM (
+        SELECT * FROM unnest(
+          ${cargoIds}::text[],
+          ${gastoComunes}::float8[],
+          ${cocheraMontos}::float8[],
+          ${bauleraMontos}::float8[],
+          ${calefacciones}::float8[],
+          ${totales}::float8[],
+          ${saldosActuales}::float8[]
+        ) AS t(id, "gastoComun", cochera, baulera, calefaccion, total, "saldoActual")
+      ) AS u
+      WHERE c.id = u.id
+    `);
+  }
+
+  if (cocherasIndividuales.length > 0) {
+    const ids = cocherasIndividuales.map(() => randomUUID());
+    const periodoIds = cocherasIndividuales.map(() => periodoId);
+    const cocheraIds = cocherasIndividuales.map((c) => c.id);
+    const unidadCobradaIds = cocherasIndividuales.map((c) => c.unidadCobradaId);
+    const montos = cocherasIndividuales.map((c) => c.monto);
+    queries.push(prisma.$executeRaw`
+      INSERT INTO "CargoCocheraPeriodo" (id, "periodoId", "cocheraId", "unidadCobradaId", monto)
+      SELECT * FROM unnest(
+        ${ids}::text[],
+        ${periodoIds}::text[],
+        ${cocheraIds}::text[],
+        ${unidadCobradaIds}::text[],
+        ${montos}::float8[]
+      ) AS t(id, "periodoId", "cocheraId", "unidadCobradaId", monto)
+      ON CONFLICT ("periodoId", "cocheraId")
+      DO UPDATE SET "unidadCobradaId" = EXCLUDED."unidadCobradaId", monto = EXCLUDED.monto
+    `);
+  }
+
+  if (baulerasIndividuales.length > 0) {
+    const ids = baulerasIndividuales.map(() => randomUUID());
+    const periodoIds = baulerasIndividuales.map(() => periodoId);
+    const bauleraIds = baulerasIndividuales.map((b) => b.id);
+    const unidadCobradaIds = baulerasIndividuales.map((b) => b.unidadCobradaId);
+    const montos = baulerasIndividuales.map((b) => b.monto);
+    queries.push(prisma.$executeRaw`
+      INSERT INTO "CargoBauleraPeriodo" (id, "periodoId", "bauleraId", "unidadCobradaId", monto)
+      SELECT * FROM unnest(
+        ${ids}::text[],
+        ${periodoIds}::text[],
+        ${bauleraIds}::text[],
+        ${unidadCobradaIds}::text[],
+        ${montos}::float8[]
+      ) AS t(id, "periodoId", "bauleraId", "unidadCobradaId", monto)
+      ON CONFLICT ("periodoId", "bauleraId")
+      DO UPDATE SET "unidadCobradaId" = EXCLUDED."unidadCobradaId", monto = EXCLUDED.monto
+    `);
+  }
+
+  if (queries.length > 0) {
+    await prisma.$transaction(queries);
+  }
 
   return { costoPiscina, totalGastos };
 }
@@ -619,51 +685,111 @@ export async function actualizarPeriodoYCalcular(
     select: { id: true, unidadId: true, quincho: true, calefaccion: true, saldoAnterior: true, totalPagado: true },
   });
 
-  // Recalcula gasto común, cochera, baulera y el total de cada unidad. Con
-  // Promise.all las ~80 actualizaciones se disparan en paralelo (no una
-  // por una en secuencia), para no repetir el problema de lentitud que
-  // causaba el timeout al crear un período.
-  await prisma.$transaction(
-    async (tx) => {
-      await Promise.all(
-        cargos.map(async (cargo) => {
-          const unidad = await tx.unidad.findUniqueOrThrow({
-            where: { id: cargo.unidadId },
-            select: { coeficiente: true },
-          });
-          const gastoComun = totalGastos * unidad.coeficiente;
-          const cochera = cocheraPorUnidad.get(cargo.unidadId) ?? 0;
-          const baulera = bauleraPorUnidad.get(cargo.unidadId) ?? 0;
-          const total = gastoComun + cochera + baulera + cargo.quincho + cargo.calefaccion;
-          const saldoActual = total + cargo.saldoAnterior - cargo.totalPagado;
-          await tx.cargoUnidadPeriodo.update({
-            where: { id: cargo.id },
-            data: { gastoComun, cochera, baulera, total, saldoActual },
-          });
-        })
-      );
+  // Recalcula gasto común, cochera, baulera y el total de cada unidad.
+  // MISMO arreglo que en calcularGasPeriodo: antes esto era una transacción
+  // interactiva con un findUniqueOrThrow + update por cada uno de los ~79
+  // cargos (más los upserts de cocheras/bauleras), todo contra el pooler de
+  // Supabase — el mismo patrón que causaba P2028 / "Transaction not found"
+  // al calcular el gas. Acá todavía no había fallado, pero tenía la misma
+  // bomba de tiempo adentro, así que se arregla de la misma forma: un solo
+  // findMany para los coeficientes, los cálculos en JS, y 3 sentencias bulk
+  // con unnest() (un UPDATE + dos INSERT ... ON CONFLICT) en vez de ~160
+  // queries individuales.
+  const unidadesCoef = await prisma.unidad.findMany({
+    where: { id: { in: cargos.map((c) => c.unidadId) } },
+    select: { id: true, coeficiente: true },
+  });
+  const coeficientePorUnidad = new Map(unidadesCoef.map((u) => [u.id, u.coeficiente]));
 
-      // Liquidación individual de cada cochera/baulera para este período:
-      // como el período ya existe, se actualiza (upsert) en vez de crear.
-      await Promise.all(
-        cocherasIndividuales.map((c) =>
-          tx.cargoCocheraPeriodo.upsert({
-            where: { periodoId_cocheraId: { periodoId, cocheraId: c.id } },
-            create: { periodoId, cocheraId: c.id, unidadCobradaId: c.unidadCobradaId, monto: c.monto },
-            update: { unidadCobradaId: c.unidadCobradaId, monto: c.monto },
-          })
-        )
-      );
-      await Promise.all(
-        baulerasIndividuales.map((b) =>
-          tx.cargoBauleraPeriodo.upsert({
-            where: { periodoId_bauleraId: { periodoId, bauleraId: b.id } },
-            create: { periodoId, bauleraId: b.id, unidadCobradaId: b.unidadCobradaId, monto: b.monto },
-            update: { unidadCobradaId: b.unidadCobradaId, monto: b.monto },
-          })
-        )
-      );
-    },
-    { timeout: 20000, maxWait: 10000 }
-  );
+  const cargoIds: string[] = [];
+  const gastoComunes: number[] = [];
+  const cocheraMontos: number[] = [];
+  const bauleraMontos: number[] = [];
+  const totales: number[] = [];
+  const saldosActuales: number[] = [];
+
+  for (const cargo of cargos) {
+    const gastoComun = totalGastos * (coeficientePorUnidad.get(cargo.unidadId) ?? 0);
+    const cochera = cocheraPorUnidad.get(cargo.unidadId) ?? 0;
+    const baulera = bauleraPorUnidad.get(cargo.unidadId) ?? 0;
+    const total = gastoComun + cochera + baulera + cargo.quincho + cargo.calefaccion;
+    const saldoActual = total + cargo.saldoAnterior - cargo.totalPagado;
+
+    cargoIds.push(cargo.id);
+    gastoComunes.push(gastoComun);
+    cocheraMontos.push(cochera);
+    bauleraMontos.push(baulera);
+    totales.push(total);
+    saldosActuales.push(saldoActual);
+  }
+
+  const queries = [];
+
+  if (cargoIds.length > 0) {
+    queries.push(prisma.$executeRaw`
+      UPDATE "CargoUnidadPeriodo" AS c
+      SET "gastoComun" = u."gastoComun",
+          cochera = u.cochera,
+          baulera = u.baulera,
+          total = u.total,
+          "saldoActual" = u."saldoActual"
+      FROM (
+        SELECT * FROM unnest(
+          ${cargoIds}::text[],
+          ${gastoComunes}::float8[],
+          ${cocheraMontos}::float8[],
+          ${bauleraMontos}::float8[],
+          ${totales}::float8[],
+          ${saldosActuales}::float8[]
+        ) AS t(id, "gastoComun", cochera, baulera, total, "saldoActual")
+      ) AS u
+      WHERE c.id = u.id
+    `);
+  }
+
+  // Liquidación individual de cada cochera/baulera para este período: como
+  // el período ya existe, se actualiza (upsert) en vez de crear.
+  if (cocherasIndividuales.length > 0) {
+    const ids = cocherasIndividuales.map(() => randomUUID());
+    const periodoIds = cocherasIndividuales.map(() => periodoId);
+    const cocheraIds = cocherasIndividuales.map((c) => c.id);
+    const unidadCobradaIds = cocherasIndividuales.map((c) => c.unidadCobradaId);
+    const montos = cocherasIndividuales.map((c) => c.monto);
+    queries.push(prisma.$executeRaw`
+      INSERT INTO "CargoCocheraPeriodo" (id, "periodoId", "cocheraId", "unidadCobradaId", monto)
+      SELECT * FROM unnest(
+        ${ids}::text[],
+        ${periodoIds}::text[],
+        ${cocheraIds}::text[],
+        ${unidadCobradaIds}::text[],
+        ${montos}::float8[]
+      ) AS t(id, "periodoId", "cocheraId", "unidadCobradaId", monto)
+      ON CONFLICT ("periodoId", "cocheraId")
+      DO UPDATE SET "unidadCobradaId" = EXCLUDED."unidadCobradaId", monto = EXCLUDED.monto
+    `);
+  }
+
+  if (baulerasIndividuales.length > 0) {
+    const ids = baulerasIndividuales.map(() => randomUUID());
+    const periodoIds = baulerasIndividuales.map(() => periodoId);
+    const bauleraIds = baulerasIndividuales.map((b) => b.id);
+    const unidadCobradaIds = baulerasIndividuales.map((b) => b.unidadCobradaId);
+    const montos = baulerasIndividuales.map((b) => b.monto);
+    queries.push(prisma.$executeRaw`
+      INSERT INTO "CargoBauleraPeriodo" (id, "periodoId", "bauleraId", "unidadCobradaId", monto)
+      SELECT * FROM unnest(
+        ${ids}::text[],
+        ${periodoIds}::text[],
+        ${bauleraIds}::text[],
+        ${unidadCobradaIds}::text[],
+        ${montos}::float8[]
+      ) AS t(id, "periodoId", "bauleraId", "unidadCobradaId", monto)
+      ON CONFLICT ("periodoId", "bauleraId")
+      DO UPDATE SET "unidadCobradaId" = EXCLUDED."unidadCobradaId", monto = EXCLUDED.monto
+    `);
+  }
+
+  if (queries.length > 0) {
+    await prisma.$transaction(queries);
+  }
 }
