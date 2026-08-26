@@ -26,15 +26,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "#1c4534" }}>
-      {/* Foto en una franja de altura fija (no toda la pantalla): la imagen es
-          casi cuadrada, y si se la fuerza a cubrir un min-h-screen angosto y
-          alto (celular) se agranda tanto que el texto grabado queda cortado
-          en los bordes. Limitando la altura, bg-cover no necesita escalar
-          tanto y el texto entra completo. */}
+    <div className="min-h-[100dvh] flex flex-col" style={{ background: "#1c4534" }}>
       <div
-        className="relative w-full h-[34vh] min-h-[240px] max-h-[380px] bg-cover bg-center flex items-end justify-center pb-6"
-        style={{ backgroundImage: "url(/hero-pool.jpg)" }}
+        className="relative w-full h-[34vh] min-h-[240px] max-h-[380px] bg-cover flex items-end justify-center pb-6"
+        style={{ backgroundImage: "url(/hero-pool.jpg)", backgroundPosition: "center 15%" }}
       >
         <div className="absolute inset-0 bg-black/45" />
         <div className="relative z-10 text-center px-4">
