@@ -159,7 +159,12 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                     <form action={registrarPagoAction} className="mt-1 space-y-1 w-36">
                       <input type="hidden" name="cargoId" value={c.id} />
                       <input name="monto" placeholder="Monto" inputMode="decimal" required className="text-xs" />
-                      <input name="medio" placeholder="Medio (opcional)" className="text-xs" />
+                      <select name="medio" defaultValue="Transferencia" className="text-xs w-full">
+                        <option value="Transferencia">Transferencia</option>
+                        <option value="Depósito">Depósito</option>
+                        <option value="Efectivo">Efectivo</option>
+                        <option value="Otro">Otro</option>
+                      </select>
                       <button className="btn btn-primary w-full text-xs">Guardar</button>
                     </form>
                   </details>
