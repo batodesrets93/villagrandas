@@ -127,7 +127,7 @@ export default async function PropietarioPage() {
                             <ul className="ml-2">
                               {g.comprobantes.map((comp) => (
                                 <li key={comp.id}>
-                                  
+                                  <a
                                     href={`/api/comprobantes/${comp.id}`}
                                     download
                                     className="text-brand-600 underline"
