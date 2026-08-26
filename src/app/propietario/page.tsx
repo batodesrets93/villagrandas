@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import CambiarPasswordForm from "@/components/CambiarPasswordForm";
+import DescargarPdfButton from "@/components/DescargarPdfButton";
 
 function money(n: number) {
   return "$\u00A0" + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -90,13 +91,10 @@ export default async function PropietarioPage() {
               </div>
 
               <div className="flex items-center gap-4 mt-2.5 text-xs">
-                <a
-                  href={`/api/pdf/${c.id}`}
-                  download
-                  className="font-medium text-brand-600 underline"
-                >
-                  Descargar PDF
-                </a>
+                <DescargarPdfButton
+                  cargoId={c.id}
+                  nombreArchivo={`expensa_${unidad.piso}${unidad.depto}_${c.periodo.etiqueta.replace(/\s+/g, "_")}.pdf`}
+                />
 
                 {c.pagos.length > 0 && (
                   <details>
@@ -129,7 +127,7 @@ export default async function PropietarioPage() {
                             <ul className="ml-2">
                               {g.comprobantes.map((comp) => (
                                 <li key={comp.id}>
-                                  <a
+                                  
                                     href={`/api/comprobantes/${comp.id}`}
                                     download
                                     className="text-brand-600 underline"
