@@ -53,91 +53,101 @@ export default async function PropietarioPage() {
         {deudaActual <= 0 && <p className="text-sm text-brand-600 mt-1">Estás al día 🎉</p>}
       </div>
 
-      <div className="card overflow-x-auto">
+      <div className="card">
         <h2 className="font-semibold mb-3">Historial de liquidaciones</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Período</th>
-              <th>Vencimiento</th>
-              <th>Total período</th>
-              <th>Pagado</th>
-              <th>Saldo</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {cargos.map((c) => (
-              <tr key={c.id}>
-                <td>{c.periodo.etiqueta}</td>
-                <td>{c.periodo.vencimiento.toLocaleDateString("es-AR")}</td>
-                <td>{money(c.total)}</td>
-                <td>
-                  {money(c.totalPagado)}
-                  {c.pagos.length > 0 && (
-                    <details className="mt-1">
-                      <summary className="cursor-pointer text-xs text-brand-600 underline">
-                        {c.pagos.length === 1 ? "1 pago" : `${c.pagos.length} pagos`}
-                      </summary>
-                      <table className="mt-1">
-                        <tbody>
-                          {c.pagos.map((p) => (
-                            <tr key={p.id}>
-                              <td className="whitespace-nowrap">{p.fecha.toLocaleDateString("es-AR")}</td>
-                              <td className="text-right">{money(p.monto)}</td>
-                              <td className="text-gray-500">{p.medio || "-"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </details>
-                  )}
-                </td>
-                <td className={c.saldoActual > 0 ? "text-red-600 font-medium" : ""}>{money(c.saldoActual)}</td>
-                <td className="space-y-1">
-                  <a href={`/api/pdf/${c.id}`} className="text-brand-600 underline text-sm block">
-                    PDF
-                  </a>
-                  {c.periodo.gastos.some((g) => g.comprobantes.length > 0) && (
-                    <details>
-                      <summary className="cursor-pointer text-xs text-brand-600 underline">Comprobantes</summary>
-                      <ul className="mt-1 space-y-1">
-                        {c.periodo.gastos
-                          .filter((g) => g.comprobantes.length > 0)
-                          .map((g) => (
-                            <li key={g.id} className="text-xs">
-                              <span className="text-gray-500">{g.nombre}:</span>
-                              <ul className="ml-2">
-                                {g.comprobantes.map((comp) => (
-                                  <li key={comp.id}>
-                                    <a
-                                      href={`/api/comprobantes/${comp.id}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-brand-600 underline"
-                                    >
-                                      {comp.nombreArchivo}
-                                    </a>
-                                  </li>
-                                ))}
-                              </ul>
-                            </li>
-                          ))}
-                      </ul>
-                    </details>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {cargos.length === 0 && (
-              <tr>
-                <td colSpan={6} className="text-center text-gray-400 py-6">
-                  Todavía no hay liquidaciones cargadas.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+
+        {cargos.length === 0 && (
+          <p className="text-center text-gray-400 py-6 text-sm">Todavía no hay liquidaciones cargadas.</p>
+        )}
+
+        <div className="space-y-3">
+          {cargos.map((c) => (
+            <div key={c.id} className="rounded-xl border border-gray-100 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-gray-800">{c.periodo.etiqueta}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Vence {c.periodo.vencimiento.toLocaleDateString("es-AR")}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-400">Saldo</p>
+                  <p className={`font-bold ${c.saldoActual > 0 ? "text-red-600" : "text-brand-700"}`}>
+                    {money(c.saldoActual)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-4 mt-2.5 pt-2.5 border-t border-gray-50 text-xs">
+                <p>
+                  <span className="text-gray-400">Total: </span>
+                  <span className="text-gray-700">{money(c.total)}</span>
+                </p>
+                <p>
+                  <span className="text-gray-400">Pagado: </span>
+                  <span className="text-gray-700">{money(c.totalPagado)}</span>
+                </p>
+              </div>
+
+              <div className="flex items-center gap-4 mt-2.5 text-xs">
+                
+                  href={`/api/pdf/${c.id}`}
+                  download
+                  className="font-medium text-brand-600 underline"
+                >
+                  Descargar PDF
+                </a>
+
+                {c.pagos.length > 0 && (
+                  <details>
+                    <summary className="cursor-pointer text-brand-600 underline">
+                      {c.pagos.length === 1 ? "1 pago" : `${c.pagos.length} pagos`}
+                    </summary>
+                    <table className="mt-2">
+                      <tbody>
+                        {c.pagos.map((p) => (
+                          <tr key={p.id}>
+                            <td className="whitespace-nowrap">{p.fecha.toLocaleDateString("es-AR")}</td>
+                            <td className="text-right">{money(p.monto)}</td>
+                            <td className="text-gray-500">{p.medio || "-"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </details>
+                )}
+
+                {c.periodo.gastos.some((g) => g.comprobantes.length > 0) && (
+                  <details>
+                    <summary className="cursor-pointer text-brand-600 underline">Comprobantes</summary>
+                    <ul className="mt-2 space-y-1">
+                      {c.periodo.gastos
+                        .filter((g) => g.comprobantes.length > 0)
+                        .map((g) => (
+                          <li key={g.id}>
+                            <span className="text-gray-500">{g.nombre}:</span>
+                            <ul className="ml-2">
+                              {g.comprobantes.map((comp) => (
+                                <li key={comp.id}>
+                                  
+                                    href={`/api/comprobantes/${comp.id}`}
+                                    download
+                                    className="text-brand-600 underline"
+                                  >
+                                    {comp.nombreArchivo}
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          </li>
+                        ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <CambiarPasswordForm />
