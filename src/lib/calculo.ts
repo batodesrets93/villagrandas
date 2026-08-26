@@ -381,36 +381,37 @@ export async function calcularGasPeriodo(
     consumoPorUnidad.set(u.id, actual - anterior);
   }
 
-  // NOTA: se le agregan timeout/maxWait explícitos, igual que al resto de las
-  // transacciones de este archivo. Sin esto, Prisma usa el default de 5000ms,
-  // que con ~79 upserts secuenciales contra Supabase se puede quedar corto y
-  // tirar un error de timeout de transacción (P2028) a mitad de camino.
-  // IMPORTANTE: timeout/maxWait solo son válidos en la forma "interactiva"
-  // de $transaction (función async), no en la forma de array de promesas
-  // (que solo acepta isolationLevel) — por eso acá se usa Promise.all
-  // adentro de un callback, en vez de pasar el array directamente.
-  await prisma.$transaction(
-    async (tx) => {
-      await Promise.all(
-        unidades.map((u) =>
-          tx.lecturaGas.upsert({
-            where: { periodoId_unidadId: { periodoId, unidadId: u.id } },
-            create: {
-              periodoId,
-              unidadId: u.id,
-              lecturaActual: lecturaActualPorUnidad.get(u.id) ?? 0,
-              consumo: consumoPorUnidad.get(u.id) ?? 0,
-            },
-            update: {
-              lecturaActual: lecturaActualPorUnidad.get(u.id) ?? 0,
-              consumo: consumoPorUnidad.get(u.id) ?? 0,
-            },
-          })
-        )
-      );
-    },
-    { timeout: 20000, maxWait: 10000 }
-  );
+  // ANTES: esto era un $transaction interactiva con ~79 upserts lanzados en
+  // paralelo (Promise.all) sobre una única conexión (la que te da el pooler
+  // de transacción de Supabase). Esos 79 upserts en realidad NO corrían en
+  // paralelo contra la base: se encolaban uno atrás del otro en esa misma
+  // conexión, y contra el pooler cada uno tarda bastante (ida y vuelta de
+  // red), así que la suma total podía superar el timeout aunque estuviera
+  // en 20000ms — de ahí el P2028 con "20128 ms passed".
+  //
+  // AHORA: un solo INSERT ... ON CONFLICT con unnest() de arrays, así las
+  // 79 filas se mandan y se escriben en UN solo viaje a la base, sin
+  // transacción interactiva y sin riesgo de timeout.
+  if (unidades.length > 0) {
+    const ids = unidades.map(() => randomUUID());
+    const periodoIds = unidades.map(() => periodoId);
+    const unidadIds = unidades.map((u) => u.id);
+    const lecturasActuales = unidades.map((u) => lecturaActualPorUnidad.get(u.id) ?? 0);
+    const consumos = unidades.map((u) => consumoPorUnidad.get(u.id) ?? 0);
+
+    await prisma.$executeRaw`
+      INSERT INTO "LecturaGas" (id, "periodoId", "unidadId", "lecturaActual", "consumo")
+      SELECT * FROM unnest(
+        ${ids}::text[],
+        ${periodoIds}::text[],
+        ${unidadIds}::text[],
+        ${lecturasActuales}::float8[],
+        ${consumos}::float8[]
+      ) AS t(id, "periodoId", "unidadId", "lecturaActual", "consumo")
+      ON CONFLICT ("periodoId", "unidadId")
+      DO UPDATE SET "lecturaActual" = EXCLUDED."lecturaActual", "consumo" = EXCLUDED."consumo"
+    `;
+  }
 
   // Costo de gas por unidad, torre por torre (cada torre con su propia
   // factura y su propio total de m2GasPonderado/consumo, sin mezclarlas).
