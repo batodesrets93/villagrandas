@@ -90,7 +90,7 @@ export default async function PropietarioPage() {
               </div>
 
               <div className="flex items-center gap-4 mt-2.5 text-xs">
-                
+                <a
                   href={`/api/pdf/${c.id}`}
                   download
                   className="font-medium text-brand-600 underline"
@@ -129,7 +129,7 @@ export default async function PropietarioPage() {
                             <ul className="ml-2">
                               {g.comprobantes.map((comp) => (
                                 <li key={comp.id}>
-                                  
+                                  <a
                                     href={`/api/comprobantes/${comp.id}`}
                                     download
                                     className="text-brand-600 underline"
@@ -142,3 +142,15 @@ export default async function PropietarioPage() {
                           </li>
                         ))}
                     </ul>
+                  </details>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <CambiarPasswordForm />
+    </div>
+  );
+}
