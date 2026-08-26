@@ -316,6 +316,70 @@ export async function registrarPago(cargoId: string, monto: number, medio?: stri
 }
 
 /**
+ * Confirma un pago que un propietario informó desde la app: crea el Pago
+ * real (mismo efecto que registrarPago: descuenta totalPagado/saldoActual
+ * del cargo) y lo deja linkeado al PagoInformado via pagoId. El medio final
+ * puede pisar el que declaró el propietario (ej: el admin corrige a
+ * "Efectivo" si así lo ve acreditado). Si el PagoInformado ya no está
+ * PENDIENTE (ya fue confirmado o rechazado, ej. por otra pestaña abierta),
+ * tira error en vez de duplicar el pago.
+ */
+export async function confirmarPagoInformado(
+  pagoInformadoId: string,
+  opts?: { medio?: string; notaAdmin?: string }
+) {
+  return prisma.$transaction(async (tx) => {
+    const informado = await tx.pagoInformado.findUniqueOrThrow({ where: { id: pagoInformadoId } });
+    if (informado.estado !== "PENDIENTE") {
+      throw new Error("Este pago informado ya fue procesado antes.");
+    }
+
+    const pago = await tx.pago.create({
+      data: {
+        cargoId: informado.cargoId,
+        monto: informado.monto,
+        medio: opts?.medio || informado.medio || undefined,
+        nota: informado.nota || undefined,
+      },
+    });
+
+    const pagos = await tx.pago.aggregate({ where: { cargoId: informado.cargoId }, _sum: { monto: true } });
+    const totalPagado = pagos._sum.monto ?? 0;
+    const cargo = await tx.cargoUnidadPeriodo.findUniqueOrThrow({ where: { id: informado.cargoId } });
+    const saldoActual = cargo.total + cargo.saldoAnterior - totalPagado;
+    await tx.cargoUnidadPeriodo.update({
+      where: { id: informado.cargoId },
+      data: { totalPagado, saldoActual },
+    });
+
+    return tx.pagoInformado.update({
+      where: { id: pagoInformadoId },
+      data: {
+        estado: "CONFIRMADO",
+        pagoId: pago.id,
+        notaAdmin: opts?.notaAdmin || undefined,
+        resueltoAt: new Date(),
+      },
+    });
+  });
+}
+
+/**
+ * Rechaza un pago informado (ej: no aparece en la cuenta del edificio, o el
+ * monto no coincide). No toca el saldo del propietario ni crea ningún Pago.
+ */
+export async function rechazarPagoInformado(pagoInformadoId: string, notaAdmin?: string) {
+  const informado = await prisma.pagoInformado.findUniqueOrThrow({ where: { id: pagoInformadoId } });
+  if (informado.estado !== "PENDIENTE") {
+    throw new Error("Este pago informado ya fue procesado antes.");
+  }
+  return prisma.pagoInformado.update({
+    where: { id: pagoInformadoId },
+    data: { estado: "RECHAZADO", notaAdmin: notaAdmin || undefined, resueltoAt: new Date() },
+  });
+}
+
+/**
  * Calcula el gas (calefaccion) de un período a partir de las lecturas de
  * medidor de agua caliente de cada unidad (incluida la pileta, marcada con
  * Unidad.esEspacioComun = true) y de las dos facturas del período (Torre
