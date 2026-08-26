@@ -51,6 +51,7 @@ model Usuario {
   passwordHash String
   nombre       String
   rol          Rol
+  activo       Boolean   @default(true)
   unidadId     String?
   unidad       Unidad?   @relation(fields: [unidadId], references: [id])
   reclamos     Reclamo[]
