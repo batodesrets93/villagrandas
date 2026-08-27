@@ -149,7 +149,15 @@ export async function enviarLiquidacionPorEmail(opts: {
       `Te adjuntamos la liquidación de expensas del período ${opts.periodoEtiqueta} correspondiente a la unidad ${opts.unidadLabel}.\n\n` +
       `Total a pagar: ${money(opts.totalAPagar)}\n` +
       `Vencimiento: ${opts.vencimiento.toLocaleDateString("es-AR")}\n\n` +
-      `Los pagos se hacen por transferencia o depósito; avisanos por WhatsApp o email cuando lo hagas.\n\n` +
+      `FORMAS DE PAGO\n` +
+      `El pago se puede hacer en efectivo, por transferencia o por depósito.\n\n` +
+      `Si pagás por transferencia o depósito, por favor informalo a través de la app cargando el comprobante. No se aceptarán comprobantes por WhatsApp.\n\n` +
+      `DATOS BANCARIOS\n` +
+      `NOMBRE: COSTA TRANS VIAL\n` +
+      `CUIT: 30-53466745-7\n` +
+      `BANCO: SANTANDER\n` +
+      `CVU: 0720067020000001754504\n` +
+      `ALIAS: PUMA.ALPACA.AXILA\n\n` +
       `Administración Torres Villa Grandas\n` +
       `Administración Joaquín Rigueiro · Cel. 223 5919009`,
     attachments: [
