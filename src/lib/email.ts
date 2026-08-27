@@ -54,7 +54,7 @@ export async function enviarBienvenidaAccesoPorEmail(opts: {
       `1) INGRESAR\n` +
       `Entrá desde el navegador de tu celular o computadora a:\n` +
       `${appUrl}\n` +
-      `Usá este email (${opts.to}) y la contraseña que te dio la administración.\n\n` +
+      `Usá este email (${opts.to}) y la contraseña provisoria: cambiar1234\n\n` +
       `2) PONER LA APP EN LA PANTALLA DE INICIO DEL CELULAR (opcional, pero recomendado)\n` +
       `No hace falta descargar nada de App Store ni Play Store. Con la página ya abierta en tu celular:\n` +
       `- iPhone (Safari): tocá el ícono de compartir (el cuadrado con la flecha hacia arriba) y elegí "Agregar a pantalla de inicio".\n` +
