@@ -89,7 +89,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
         <table>
           <thead>
             <tr>
-              <th>Unidad</th>
+              <th className="sticky-col">Unidad</th>
               <th>Titular</th>
               <th>Gasto común</th>
               <th>Coch./Baul.</th>
@@ -111,7 +111,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
               const bauleraM2 = m2Complementarios?.bauleraM2 ?? 0;
               return (
               <tr key={c.id}>
-                <td>
+                <td className="sticky-col">
                   {c.unidad.torre === "GRANDE" ? "TG" : "TC"} {c.unidad.piso}º{c.unidad.depto}
                 </td>
                 <td>{c.unidad.titular}</td>
