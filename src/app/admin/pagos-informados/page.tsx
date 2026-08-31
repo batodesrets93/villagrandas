@@ -15,24 +15,45 @@ const badgeEstado: Record<string, string> = {
   RECHAZADO: "bg-red-100 text-red-700",
 };
 
+// Envoltorios locales: confirmarPagoInformadoAction / rechazarPagoInformadoAction
+// devuelven ResultadoAccion (para poder mostrar errores en otros contextos),
+// pero el atributo `action` de un <form> nativo necesita una función que
+// devuelva void. Estos wrappers son Server Actions propias (declaradas con
+// "use server" acá adentro) que llaman a la acción real y descartan el
+// resultado.
+async function confirmarWrapper(formData: FormData) {
+  "use server";
+  await confirmarPagoInformadoAction(formData);
+}
+
+async function rechazarWrapper(formData: FormData) {
+  "use server";
+  await rechazarPagoInformadoAction(formData);
+}
+
+const includePago = {
+  cargo: { include: { unidad: true, periodo: true } },
+  comprobantes: true,
+} as const;
+
+function fetchPendientes() {
+  return prisma.pagoInformado.findMany({
+    where: { estado: "PENDIENTE" },
+    orderBy: { createdAt: "asc" },
+    include: includePago,
+  });
+}
+
+type PagoInformadoConDetalle = Awaited<ReturnType<typeof fetchPendientes>>[number];
+
 export default async function PagosInformadosPage() {
   const [pendientes, resueltos] = await Promise.all([
-    prisma.pagoInformado.findMany({
-      where: { estado: "PENDIENTE" },
-      orderBy: { createdAt: "asc" },
-      include: {
-        cargo: { include: { unidad: true, periodo: true } },
-        comprobantes: true,
-      },
-    }),
+    fetchPendientes(),
     prisma.pagoInformado.findMany({
       where: { estado: { in: ["CONFIRMADO", "RECHAZADO"] } },
       orderBy: { resueltoAt: "desc" },
       take: 30,
-      include: {
-        cargo: { include: { unidad: true, periodo: true } },
-        comprobantes: true,
-      },
+      include: includePago,
     }),
   ]);
 
@@ -44,7 +65,7 @@ export default async function PagosInformadosPage() {
         <h2 className="font-semibold mb-3">Pendientes de confirmar ({pendientes.length})</h2>
         {pendientes.length === 0 && <p className="text-sm text-gray-400">No hay pagos informados pendientes.</p>}
         <div className="space-y-4">
-          {pendientes.map((p) => (
+          {pendientes.map((p: PagoInformadoConDetalle) => (
             <div key={p.id} className="border-t border-gray-100 pt-3">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
@@ -59,7 +80,7 @@ export default async function PagosInformadosPage() {
                   {p.nota && <p className="text-sm text-gray-600 mt-1">Nota: {p.nota}</p>}
                   {p.comprobantes.length > 0 && (
                     <ul className="flex flex-wrap gap-2 mt-2">
-                      {p.comprobantes.map((c) => (
+                      {p.comprobantes.map((c: PagoInformadoConDetalle["comprobantes"][number]) => (
                         <li key={c.id}>
                           <a
                             href={`/api/pagos-informados-adjuntos/${c.id}`}
@@ -77,7 +98,7 @@ export default async function PagosInformadosPage() {
                 </div>
 
                 <div className="flex flex-col gap-2 w-full sm:w-56">
-                  <form action={confirmarPagoInformadoAction} className="flex gap-1">
+                  <form action={confirmarWrapper} className="flex gap-1">
                     <input type="hidden" name="id" value={p.id} />
                     <select name="medio" defaultValue={p.medio ?? "Transferencia"} className="text-xs flex-1">
                       <option value="Transferencia">Transferencia</option>
@@ -89,7 +110,7 @@ export default async function PagosInformadosPage() {
                   </form>
                   <details>
                     <summary className="cursor-pointer text-xs text-gray-500">Rechazar</summary>
-                    <form action={rechazarPagoInformadoAction} className="mt-1 flex gap-1">
+                    <form action={rechazarWrapper} className="mt-1 flex gap-1">
                       <input type="hidden" name="id" value={p.id} />
                       <input name="notaAdmin" placeholder="Motivo (opcional)" className="text-xs flex-1" />
                       <button className="btn btn-danger text-xs px-2">Rechazar</button>
@@ -106,7 +127,7 @@ export default async function PagosInformadosPage() {
         <h2 className="font-semibold mb-3">Resueltos recientemente</h2>
         {resueltos.length === 0 && <p className="text-sm text-gray-400">Todavía no hay pagos resueltos.</p>}
         <div className="space-y-2">
-          {resueltos.map((p) => (
+          {resueltos.map((p: PagoInformadoConDetalle) => (
             <div
               key={p.id}
               className="flex items-center justify-between text-sm border-t border-gray-100 pt-2 flex-wrap gap-1"
