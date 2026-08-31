@@ -1,179 +1,124 @@
-import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { registrarPagoAction, actualizarCalefaccionAction } from "@/lib/actions";
-import { agruparM2ComplementariosPorUnidad, calcularTotalM2Edificio } from "@/lib/calculo";
-import EnviarEmailsButton from "@/components/EnviarEmailsButton";
-import ComprobantesGasto from "@/components/ComprobantesGasto";
+import { confirmarPagoInformadoAction, rechazarPagoInformadoAction } from "@/lib/actions";
 
 function money(n: number) {
   return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function m2Texto(n: number) {
-  // Redondeado para mostrar; el valor real se sigue usando en el cálculo.
-  return n ? Math.round(n).toLocaleString("es-AR") + " m²" : "-";
+function unidadLabel(unidad: { torre: string; piso: string; depto: string; titular: string }) {
+  return `${unidad.torre === "GRANDE" ? "TG" : "TC"} ${unidad.piso}º${unidad.depto} · ${unidad.titular}`;
 }
 
-function porcentajeTexto(n: number) {
-  return (n * 100).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + " %";
-}
+const badgeEstado: Record<string, string> = {
+  PENDIENTE: "bg-yellow-100 text-yellow-700",
+  CONFIRMADO: "bg-green-100 text-green-700",
+  RECHAZADO: "bg-red-100 text-red-700",
+};
 
-export default async function DetallePeriodoPage({ params }: { params: { id: string } }) {
-  const periodo = await prisma.periodoExpensa.findUniqueOrThrow({
-    where: { id: params.id },
-    include: {
-      gastos: { orderBy: { orden: "asc" }, include: { comprobantes: true } },
-      cargos: { include: { unidad: true, pagos: true }, orderBy: [{ unidad: { torre: "asc" } }, { unidad: { piso: "asc" } }, { unidad: { depto: "asc" } }] },
-    },
-  });
-
-  // m2 total REAL del edificio (deptos + TODAS las cocheras + TODAS las
-  // bauleras, asignadas o no) para el % de incidencia total de cada unidad.
-  const [m2ComplementariosPorUnidad, totalM2Edificio] = await Promise.all([
-    agruparM2ComplementariosPorUnidad(),
-    calcularTotalM2Edificio(),
+export default async function PagosInformadosPage() {
+  const [pendientes, resueltos] = await Promise.all([
+    prisma.pagoInformado.findMany({
+      where: { estado: "PENDIENTE" },
+      orderBy: { createdAt: "asc" },
+      include: {
+        cargo: { include: { unidad: true, periodo: true } },
+        comprobantes: true,
+      },
+    }),
+    prisma.pagoInformado.findMany({
+      where: { estado: { in: ["CONFIRMADO", "RECHAZADO"] } },
+      orderBy: { resueltoAt: "desc" },
+      take: 30,
+      include: {
+        cargo: { include: { unidad: true, periodo: true } },
+        comprobantes: true,
+      },
+    }),
   ]);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-brand-700">{periodo.etiqueta}</h1>
-          <p className="text-sm text-gray-500">
-            {periodo.fechaInicio.toLocaleDateString("es-AR")} al {periodo.fechaFin.toLocaleDateString("es-AR")} · Vence{" "}
-            {periodo.vencimiento.toLocaleDateString("es-AR")}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href={`/admin/expensas/${periodo.id}/gas`} className="btn btn-secondary text-sm">
-            Calcular gas / calefacción
-          </Link>
-          <EnviarEmailsButton periodoId={periodo.id} etiqueta={periodo.etiqueta} />
+      <h1 className="text-2xl font-bold text-brand-700">Pagos informados</h1>
+
+      <div className="card">
+        <h2 className="font-semibold mb-3">Pendientes de confirmar ({pendientes.length})</h2>
+        {pendientes.length === 0 && <p className="text-sm text-gray-400">No hay pagos informados pendientes.</p>}
+        <div className="space-y-4">
+          {pendientes.map((p) => (
+            <div key={p.id} className="border-t border-gray-100 pt-3">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="font-medium">{unidadLabel(p.cargo.unidad)}</p>
+                  <p className="text-sm text-gray-500">
+                    {p.cargo.periodo.etiqueta} · Informado el {p.createdAt.toLocaleDateString("es-AR")}
+                  </p>
+                  <p className="text-sm mt-1">
+                    <span className="font-semibold text-brand-700">{money(p.monto)}</span> ·{" "}
+                    {p.fecha.toLocaleDateString("es-AR")} · {p.medio ?? "Sin medio informado"}
+                  </p>
+                  {p.nota && <p className="text-sm text-gray-600 mt-1">Nota: {p.nota}</p>}
+                  {p.comprobantes.length > 0 && (
+                    <ul className="flex flex-wrap gap-2 mt-2">
+                      {p.comprobantes.map((c) => (
+                        <li key={c.id}>
+                          <a
+                            href={`/api/pagos-informados-adjuntos/${c.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-brand-600 underline"
+                            title={c.nombreArchivo}
+                          >
+                            📎 {c.nombreArchivo}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2 w-full sm:w-56">
+                  <form action={confirmarPagoInformadoAction} className="flex gap-1">
+                    <input type="hidden" name="id" value={p.id} />
+                    <select name="medio" defaultValue={p.medio ?? "Transferencia"} className="text-xs flex-1">
+                      <option value="Transferencia">Transferencia</option>
+                      <option value="Depósito">Depósito</option>
+                      <option value="Efectivo">Efectivo</option>
+                      <option value="Otro">Otro</option>
+                    </select>
+                    <button className="btn btn-primary text-xs px-2">Confirmar</button>
+                  </form>
+                  <details>
+                    <summary className="cursor-pointer text-xs text-gray-500">Rechazar</summary>
+                    <form action={rechazarPagoInformadoAction} className="mt-1 flex gap-1">
+                      <input type="hidden" name="id" value={p.id} />
+                      <input name="notaAdmin" placeholder="Motivo (opcional)" className="text-xs flex-1" />
+                      <button className="btn btn-danger text-xs px-2">Rechazar</button>
+                    </form>
+                  </details>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
       <div className="card">
-        <h2 className="font-semibold mb-2">Gastos del período</h2>
-        <table>
-          <tbody>
-            {periodo.gastos.map((g) => (
-              <tr key={g.id}>
-                <td>
-                  {g.nombre} {g.esFondoReserva && <span className="text-xs text-brand-600">(fondo de reserva)</span>}
-                </td>
-                <td className="text-right">{money(g.monto)}</td>
-                <td>
-                  <ComprobantesGasto
-                    gastoId={g.id}
-                    comprobantes={g.comprobantes.map((c) => ({
-                      id: c.id,
-                      nombreArchivo: c.nombreArchivo,
-                      tipoArchivo: c.tipoArchivo,
-                      tamanio: c.tamanio,
-                    }))}
-                  />
-                </td>
-              </tr>
-            ))}
-            <tr className="font-bold">
-              <td>Total</td>
-              <td className="text-right">{money(periodo.totalGastos)}</td>
-              <td></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card overflow-x-auto">
-        <h2 className="font-semibold mb-3">Liquidación por unidad ({periodo.cargos.length})</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Unidad</th>
-              <th>Titular</th>
-              <th>Gasto común</th>
-              <th>Coch./Baul.</th>
-              <th title="m² de cochera y baulera asignados a la unidad">Coch./Baul. (m²)</th>
-              <th title="(m² unidad + cochera + baulera) / m² total del edificio">% Incidencia total</th>
-              <th>Quincho</th>
-              <th>Calefacción</th>
-              <th>Total</th>
-              <th>Saldo ant.</th>
-              <th>Pagado</th>
-              <th>A pagar</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {periodo.cargos.map((c) => {
-              const m2Complementarios = m2ComplementariosPorUnidad.get(c.unidadId);
-              const cocheraM2 = m2Complementarios?.cocheraM2 ?? 0;
-              const bauleraM2 = m2Complementarios?.bauleraM2 ?? 0;
-              return (
-              <tr key={c.id}>
-                <td>
-                  {c.unidad.torre === "GRANDE" ? "TG" : "TC"} {c.unidad.piso}º{c.unidad.depto}
-                </td>
-                <td>{c.unidad.titular}</td>
-                <td>{money(c.gastoComun)}</td>
-                <td>{money(c.cochera + c.baulera)}</td>
-                <td>
-                  {cocheraM2 > 0 && m2Texto(cocheraM2)}
-                  {cocheraM2 > 0 && bauleraM2 > 0 && " + "}
-                  {bauleraM2 > 0 && m2Texto(bauleraM2)}
-                  {cocheraM2 === 0 && bauleraM2 === 0 && "-"}
-                </td>
-                <td>
-                  {totalM2Edificio > 0
-                    ? porcentajeTexto((c.unidad.m2 + cocheraM2 + bauleraM2) / totalM2Edificio)
-                    : "-"}
-                </td>
-                <td>{money(c.quincho)}</td>
-                <td>
-                  {money(c.calefaccion)}
-                  <details className="mt-1">
-                    <summary className="cursor-pointer text-xs text-gray-400">Ajuste manual</summary>
-                    <form action={actualizarCalefaccionAction} className="flex gap-1 mt-1">
-                      <input type="hidden" name="cargoId" value={c.id} />
-                      <input
-                        name="calefaccion"
-                        defaultValue={c.calefaccion || ""}
-                        placeholder="0"
-                        className="w-20 text-xs"
-                      />
-                      <button className="btn btn-secondary text-xs px-2">OK</button>
-                    </form>
-                  </details>
-                </td>
-                <td className="font-medium">{money(c.total)}</td>
-                <td>{money(c.saldoAnterior)}</td>
-                <td>{money(c.totalPagado)}</td>
-                <td className="font-bold text-brand-700">{money(c.saldoActual)}</td>
-                <td className="space-y-1">
-                  <a href={`/api/pdf/${c.id}`} className="text-brand-600 underline text-xs block">
-                    Descargar PDF
-                  </a>
-                  <EnviarEmailsButton periodoId={periodo.id} etiqueta={periodo.etiqueta} cargoId={c.id} />
-                  <details>
-                    <summary className="cursor-pointer text-xs text-gray-500">Registrar pago</summary>
-                    <form action={registrarPagoAction} className="mt-1 space-y-1 w-36">
-                      <input type="hidden" name="cargoId" value={c.id} />
-                      <input name="monto" placeholder="Monto" inputMode="decimal" required className="text-xs" />
-                      <select name="medio" defaultValue="Transferencia" className="text-xs w-full">
-                        <option value="Transferencia">Transferencia</option>
-                        <option value="Depósito">Depósito</option>
-                        <option value="Efectivo">Efectivo</option>
-                        <option value="Otro">Otro</option>
-                      </select>
-                      <button className="btn btn-primary w-full text-xs">Guardar</button>
-                    </form>
-                  </details>
-                </td>
-              </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <h2 className="font-semibold mb-3">Resueltos recientemente</h2>
+        {resueltos.length === 0 && <p className="text-sm text-gray-400">Todavía no hay pagos resueltos.</p>}
+        <div className="space-y-2">
+          {resueltos.map((p) => (
+            <div
+              key={p.id}
+              className="flex items-center justify-between text-sm border-t border-gray-100 pt-2 flex-wrap gap-1"
+            >
+              <span>
+                {unidadLabel(p.cargo.unidad)} · {p.cargo.periodo.etiqueta} · {money(p.monto)}
+                {p.notaAdmin && <span className="text-gray-400"> · {p.notaAdmin}</span>}
+              </span>
+              <span className={`text-xs px-2 py-1 rounded-full ${badgeEstado[p.estado]}`}>{p.estado}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
