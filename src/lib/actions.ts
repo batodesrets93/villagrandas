@@ -782,6 +782,20 @@ export async function informarPagoAction(formData: FormData): Promise<ResultadoA
       return { ok: false, error: "No autorizado." };
     }
 
+    // Evita duplicados por doble envío (doble clic, reenvío manual por
+    // conexión lenta, etc.): si ya hay un pago informado PENDIENTE para el
+    // mismo cargo y el mismo monto, no se crea otro.
+    const yaInformado = await prisma.pagoInformado.findFirst({
+      where: { cargoId, monto, estado: "PENDIENTE" },
+      select: { id: true },
+    });
+    if (yaInformado) {
+      return {
+        ok: false,
+        error: "Ya informaste un pago pendiente por ese mismo monto para este período. Esperá a que la administración lo confirme.",
+      };
+    }
+
     const archivos = formData
       .getAll("archivos")
       .filter((a): a is File => a instanceof File && a.size > 0);
