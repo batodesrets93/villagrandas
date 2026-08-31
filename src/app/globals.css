@@ -54,3 +54,20 @@ input, select, textarea {
 table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 th { text-align: left; padding: 0.5rem 0.75rem; background: #f2f6f4; color: #1c4534; font-weight: 600; }
 td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #eee; }
+
+/* Columna fija a la izquierda en tablas con scroll horizontal (ver
+   overflow-x-auto en .card), para no perder de vista a qué unidad
+   corresponde la fila al desplazarse hacia la derecha. */
+.sticky-col {
+  position: sticky;
+  left: 0;
+  box-shadow: 2px 0 4px -2px rgba(0, 0, 0, 0.15);
+}
+th.sticky-col {
+  background: #f2f6f4;
+  z-index: 2;
+}
+td.sticky-col {
+  background: white;
+  z-index: 1;
+}
