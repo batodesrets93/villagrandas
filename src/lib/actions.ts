@@ -206,11 +206,70 @@ export async function registrarPagoAction(formData: FormData): Promise<void> {
       return;
     }
 
-    await registrarPago(cargoId, monto, medio, nota);
+       await registrarPago(cargoId, monto, medio, nota);
     revalidatePath("/admin/expensas");
     revalidatePath("/propietario");
   } catch (e) {
     console.error("[registrarPagoAction] Error inesperado:", e);
+  }
+}
+
+// Registra varios pagos de una sola vez (importación desde Excel: ver
+// ImportarPagosForm.tsx). Cada fila inválida o con error individual se
+// descarta sin frenar al resto; al final se informa cuántos se guardaron
+// y, si hubo problemas, un detalle de los primeros para que el admin los
+// pueda corregir y reintentar solo esos.
+export async function registrarPagosMasivoAction(
+  pagos: { cargoId: string; monto: number; fecha?: string; medio?: string; nota?: string }[]
+): Promise<ResultadoAccion<{ cantidad: number; omitidos: number; detalleErrores: string[] }>> {
+  try {
+    await requireAdmin();
+    if (!Array.isArray(pagos) || pagos.length === 0) {
+      return { ok: false, error: "No se recibió ningún pago para registrar." };
+    }
+
+    let cantidad = 0;
+    let omitidos = 0;
+    const detalleErrores: string[] = [];
+
+    for (const p of pagos) {
+      const cargoId = String(p.cargoId || "");
+      const monto = typeof p.monto === "number" ? p.monto : parseMonto(String(p.monto ?? ""));
+      if (!cargoId || !monto || monto <= 0) {
+        omitidos++;
+        continue;
+      }
+      const fecha = p.fecha ? new Date(p.fecha) : undefined;
+      const fechaValida = fecha && !isNaN(fecha.getTime()) ? fecha : undefined;
+      try {
+        await registrarPago(cargoId, monto, p.medio || undefined, p.nota || undefined, fechaValida);
+        cantidad++;
+      } catch (e) {
+        omitidos++;
+        if (detalleErrores.length < 5) detalleErrores.push(`Unidad (id ${cargoId}): ${detalleError(e)}`);
+      }
+    }
+
+    revalidatePath("/admin/expensas");
+    revalidatePath("/propietario");
+
+    if (cantidad === 0) {
+      return {
+        ok: false,
+        error:
+          detalleErrores.length > 0
+            ? `No se pudo registrar ningún pago. ${detalleErrores.join(" · ")}`
+            : "No había pagos válidos para registrar: completá la columna Monto con un número mayor a 0 en al menos una fila.",
+      };
+    }
+
+    return { ok: true, data: { cantidad, omitidos, detalleErrores } };
+  } catch (e) {
+    console.error("[registrarPagosMasivoAction] Error inesperado:", e);
+    return {
+      ok: false,
+      error: "No se pudieron registrar los pagos por un error inesperado en el servidor. Probá de nuevo en un minuto.",
+    };
   }
 }
 
