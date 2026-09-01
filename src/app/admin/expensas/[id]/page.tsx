@@ -4,6 +4,7 @@ import { registrarPagoAction, actualizarCalefaccionAction } from "@/lib/actions"
 import { agruparM2ComplementariosPorUnidad, calcularTotalM2Edificio } from "@/lib/calculo";
 import EnviarEmailsButton from "@/components/EnviarEmailsButton";
 import ComprobantesGasto from "@/components/ComprobantesGasto";
+import ImportarPagosForm from "./ImportarPagosForm";
 
 function money(n: number) {
   return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -83,6 +84,17 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
           </tbody>
         </table>
       </div>
+
+      <ImportarPagosForm
+        cargos={periodo.cargos.map((c) => ({
+          id: c.id,
+          torre: c.unidad.torre,
+          piso: c.unidad.piso,
+          depto: c.unidad.depto,
+          titular: c.unidad.titular,
+          saldoActual: c.saldoActual,
+        }))}
+      />
 
       <div className="card overflow-x-auto">
         <h2 className="font-semibold mb-3">Liquidación por unidad ({periodo.cargos.length})</h2>
