@@ -301,9 +301,15 @@ export async function crearPeriodoYCalcular(params: {
   return periodo;
 }
 
-export async function registrarPago(cargoId: string, monto: number, medio?: string, nota?: string) {
+export async function registrarPago(
+  cargoId: string,
+  monto: number,
+  medio?: string,
+  nota?: string,
+  fecha?: Date
+) {
   return prisma.$transaction(async (tx) => {
-    await tx.pago.create({ data: { cargoId, monto, medio, nota } });
+    await tx.pago.create({ data: { cargoId, monto, medio, nota, ...(fecha ? { fecha } : {}) } });
     const pagos = await tx.pago.aggregate({ where: { cargoId }, _sum: { monto: true } });
     const totalPagado = pagos._sum.monto ?? 0;
     const cargo = await tx.cargoUnidadPeriodo.findUniqueOrThrow({ where: { id: cargoId } });
