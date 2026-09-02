@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import CambiarPasswordForm from "@/components/CambiarPasswordForm";
 import DescargarPdfButton from "@/components/DescargarPdfButton";
 import InformarPagoForm from "@/components/InformarPagoForm";
+import DatosPagoCard from "@/components/DatosPagoCard";
 
 function money(n: number) {
   return "$\u00A0" + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -69,6 +70,15 @@ export default async function PropietarioPage() {
         </p>
         {deudaActual <= 0 && <p className="text-sm text-brand-600 mt-1">Estás al día 🎉</p>}
       </div>
+
+      {deudaActual > 0 && (
+        <DatosPagoCard
+          monto={deudaActual}
+          referencia={`Depto ${unidad.piso}${unidad.depto}${
+            cargos[0] ? ` - ${cargos[0].periodo.etiqueta}` : ""
+          }`}
+        />
+      )}
 
       <div className="card">
         <h2 className="font-semibold mb-3">Historial de liquidaciones</h2>
