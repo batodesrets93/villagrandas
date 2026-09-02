@@ -46,8 +46,18 @@ export default async function DatosPagoCard({
         <div className="flex-1 space-y-2">
           {datos.alias && <CopyText label="Alias" value={datos.alias} />}
           {datos.cvu && <CopyText label="CVU" value={datos.cvu} />}
-          {datos.titular && <CopyText label="Titular" value={datos.titular} />}
-          {datos.cuit && <CopyText label="CUIT" value={datos.cuit} />}
+          {datos.titular && (
+            <p className="px-1">
+              <span className="block text-xs text-gray-400">Titular</span>
+              <span className="font-medium text-gray-800 break-all">{datos.titular}</span>
+            </p>
+          )}
+          {datos.cuit && (
+            <p className="px-1">
+              <span className="block text-xs text-gray-400">CUIT</span>
+              <span className="font-medium text-gray-800 break-all">{datos.cuit}</span>
+            </p>
+          )}
           {datos.banco && <p className="px-1 text-xs text-gray-400">Banco: {datos.banco}</p>}
         </div>
 
@@ -61,7 +71,7 @@ export default async function DatosPagoCard({
             className="rounded-lg border border-gray-100"
           />
           <p className="w-32 text-center text-[10px] text-gray-400">
-            Escanea para tener los datos a mano
+            Solo de referencia: no funciona para pagar desde Mercado Pago u otras apps. Escanealo para tener los datos a mano.
           </p>
         </div>
       </div>
