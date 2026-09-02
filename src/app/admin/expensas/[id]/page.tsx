@@ -5,6 +5,7 @@ import { agruparM2ComplementariosPorUnidad, calcularTotalM2Edificio } from "@/li
 import EnviarEmailsButton from "@/components/EnviarEmailsButton";
 import ComprobantesGasto from "@/components/ComprobantesGasto";
 import ImportarPagosForm from "./ImportarPagosForm";
+import EliminarPagoButton from "@/components/EliminarPagoButton";
 
 function money(n: number) {
   return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -180,6 +181,22 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                       <button className="btn btn-primary w-full text-xs">Guardar</button>
                     </form>
                   </details>
+                  {c.pagos.length > 0 && (
+                    <details>
+                      <summary className="cursor-pointer text-xs text-gray-500">Pagos ({c.pagos.length})</summary>
+                      <ul className="mt-1 space-y-1 w-44 text-xs">
+                        {c.pagos.map((p) => (
+                          <li key={p.id} className="flex items-center justify-between gap-1 border-b border-gray-100 pb-1">
+                            <span>
+                              {p.fecha.toLocaleDateString("es-AR")} · {money(p.monto)}
+                              {p.medio && ` · ${p.medio}`}
+                            </span>
+                            <EliminarPagoButton pagoId={p.id} etiqueta={`de ${money(p.monto)} (${p.fecha.toLocaleDateString("es-AR")})`} />
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                 </td>
               </tr>
               );

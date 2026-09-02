@@ -322,6 +322,42 @@ export async function registrarPago(
 }
 
 /**
+ * Elimina un pago (registrado manualmente por el admin, o creado al
+ * confirmar un pago informado) y recalcula totalPagado/saldoActual del
+ * cargo correspondiente, exactamente igual que registrarPago pero restando
+ * en vez de sumando. Si el pago venía de un PagoInformado ya CONFIRMADO, ese
+ * PagoInformado vuelve a quedar PENDIENTE (se "deshace" la confirmación)
+ * para que el admin pueda decidir de nuevo qué hacer con él, en vez de
+ * quedar en un estado inconsistente (CONFIRMADO pero sin Pago vinculado).
+ */
+export async function eliminarPago(pagoId: string) {
+  return prisma.$transaction(async (tx) => {
+    const pago = await tx.pago.findUniqueOrThrow({
+      where: { id: pagoId },
+      include: { pagoInformado: true },
+    });
+
+    if (pago.pagoInformado) {
+      await tx.pagoInformado.update({
+        where: { id: pago.pagoInformado.id },
+        data: { estado: "PENDIENTE", pagoId: null, notaAdmin: null, resueltoAt: null },
+      });
+    }
+
+    await tx.pago.delete({ where: { id: pagoId } });
+
+    const pagos = await tx.pago.aggregate({ where: { cargoId: pago.cargoId }, _sum: { monto: true } });
+    const totalPagado = pagos._sum.monto ?? 0;
+    const cargo = await tx.cargoUnidadPeriodo.findUniqueOrThrow({ where: { id: pago.cargoId } });
+    const saldoActual = cargo.total + cargo.saldoAnterior - totalPagado;
+    return tx.cargoUnidadPeriodo.update({
+      where: { id: pago.cargoId },
+      data: { totalPagado, saldoActual },
+    });
+  });
+}
+
+/**
  * Confirma un pago que un propietario informó desde la app: crea el Pago
  * real (mismo efecto que registrarPago: descuenta totalPagado/saldoActual
  * del cargo) y lo deja linkeado al PagoInformado via pagoId. El medio final
