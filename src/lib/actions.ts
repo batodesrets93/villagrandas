@@ -841,6 +841,77 @@ export async function crearReservaAction(formData: FormData): Promise<ResultadoA
   }
 }
 
+// El admin carga una reserva ya acordada por fuera del sistema (telefono,
+// en persona, etc. - hoy se coordina con un calendario en papel pegado en
+// cada quincho) y la imputa a la unidad que corresponda. No aplica el
+// minimo de 24hs de anticipacion (puede cargarse el mismo dia, o incluso
+// una fecha ya pasada, a modo de registro). El usuarioId que queda
+// asociado a la reserva es el del admin que la carga, no el del
+// propietario.
+export async function crearReservaAdminAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    const session = await requireAdmin();
+    const quinchoId = String(formData.get("quinchoId"));
+    const unidadId = String(formData.get("unidadId"));
+    const fecha = new Date(String(formData.get("fecha")));
+    const turno = String(formData.get("turno")) as "MEDIODIA" | "NOCHE";
+
+    if (!unidadId) {
+      return { ok: false, error: "Elegí a qué departamento imputar la reserva." };
+    }
+    if (isNaN(fecha.getTime())) {
+      return { ok: false, error: "Elegí una fecha válida." };
+    }
+
+    const existente = await prisma.reserva.findFirst({
+      where: { quinchoId, fecha, turno, estado: "CONFIRMADA" },
+    });
+    if (existente) {
+      return { ok: false, error: "Ese quincho ya está reservado para ese día y turno." };
+    }
+
+    const reserva = await prisma.reserva.create({
+      data: {
+        quinchoId,
+        fecha,
+        turno,
+        unidadId,
+        usuarioId: session.user.id,
+        montoAplicado: MONTO_QUINCHO,
+      },
+      include: { quincho: true, unidad: { include: { usuarios: true } } },
+    });
+
+    revalidatePath("/propietario/reservas");
+    revalidatePath("/admin/reservas");
+
+    try {
+      const label = unidadLabel(reserva.unidad);
+      const destinatarios = reserva.unidad.usuarios.map((u) => u.email).filter((e): e is string => !!e);
+      await Promise.all(
+        destinatarios.map((to) =>
+          enviarConfirmacionReservaPorEmail({
+            to,
+            quinchoNombre: reserva.quincho.nombre,
+            fecha: reserva.fecha,
+            turno: reserva.turno,
+            unidadLabel: label,
+            montoAplicado: reserva.montoAplicado,
+          })
+        )
+      );
+    } catch (e) {
+      // No bloqueamos la reserva si falla el envío del email de aviso.
+      console.error("[crearReservaAdminAction] No se pudo enviar el email de aviso:", e);
+    }
+
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[crearReservaAdminAction] Error inesperado:", e);
+    return { ok: false, error: "No se pudo crear la reserva por un error inesperado. Probá de nuevo en un minuto." };
+  }
+}
+
 export async function cancelarReservaAction(formData: FormData) {
   const session = await getServerSession(authOptions);
   if (!session) throw new Error("No autorizado");
