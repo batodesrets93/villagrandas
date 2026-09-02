@@ -128,6 +128,75 @@ function money(n: number) {
   return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function turnoLabel(turno: "MEDIODIA" | "NOCHE") {
+  return turno === "MEDIODIA" ? "Mediodía" : "Noche";
+}
+
+/**
+ * Confirmación al propietario cuando reserva un quincho desde la app.
+ */
+export async function enviarConfirmacionReservaPorEmail(opts: {
+  to: string;
+  quinchoNombre: string;
+  fecha: Date;
+  turno: "MEDIODIA" | "NOCHE";
+  unidadLabel: string;
+  montoAplicado: number;
+}) {
+  const t = getTransporter();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
+  const appUrl = process.env.NEXTAUTH_URL || "https://villagrandas.vercel.app";
+
+  await t.sendMail({
+    from,
+    to: opts.to,
+    subject: `Torres Villa Grandas - Reserva confirmada: ${opts.quinchoNombre} ${opts.fecha.toLocaleDateString("es-AR")}`,
+    text:
+      `Hola,\n\n` +
+      `Confirmamos tu reserva del quincho ${opts.quinchoNombre} para la unidad ${opts.unidadLabel}:\n\n` +
+      `Fecha: ${opts.fecha.toLocaleDateString("es-AR")}\n` +
+      `Turno: ${turnoLabel(opts.turno)}\n` +
+      `Monto a aplicar: ${money(opts.montoAplicado)}\n\n` +
+      `Este monto se va a cargar en la próxima liquidación de expensas de la unidad.\n\n` +
+      `Si necesitás cancelarla, podés hacerlo desde la app entrando a:\n` +
+      `${appUrl}/propietario/reservas\n\n` +
+      `Administración Torres Villa Grandas\n` +
+      `Administración Joaquín Rigueiro · Cel. 223 5919009`,
+  });
+}
+
+/**
+ * Aviso a los admins cuando un propietario reserva un quincho desde la app.
+ * Igual que con los pagos informados, se manda a todos los usuarios con rol
+ * ADMIN activos, no a un email fijo.
+ */
+export async function enviarAvisoReservaPorEmail(opts: {
+  to: string[];
+  quinchoNombre: string;
+  fecha: Date;
+  turno: "MEDIODIA" | "NOCHE";
+  unidadLabel: string;
+}) {
+  if (opts.to.length === 0) return;
+  const t = getTransporter();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
+  const appUrl = process.env.NEXTAUTH_URL || "https://villagrandas.vercel.app";
+
+  await t.sendMail({
+    from,
+    to: opts.to.join(","),
+    subject: `Torres Villa Grandas - Nueva reserva de quincho (${opts.unidadLabel})`,
+    text:
+      `Hola,\n\n` +
+      `La unidad ${opts.unidadLabel} reservó el quincho ${opts.quinchoNombre}:\n\n` +
+      `Fecha: ${opts.fecha.toLocaleDateString("es-AR")}\n` +
+      `Turno: ${turnoLabel(opts.turno)}\n\n` +
+      `Podés ver el detalle entrando a:\n` +
+      `${appUrl}/admin/reservas\n\n` +
+      `Administración Torres Villa Grandas`,
+  });
+}
+
 export async function enviarLiquidacionPorEmail(opts: {
   to: string;
   unidadLabel: string;

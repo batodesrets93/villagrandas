@@ -10,6 +10,7 @@ import {
   crearPeriodoYCalcular,
   actualizarPeriodoYCalcular,
   registrarPago,
+  eliminarPago,
   confirmarPagoInformado,
   rechazarPagoInformado,
   actualizarCalefaccion,
@@ -24,6 +25,8 @@ import {
   enviarRespuestaReclamoPorEmail,
   enviarBienvenidaAccesoPorEmail,
   enviarAvisoPagoInformadoPorEmail,
+  enviarConfirmacionReservaPorEmail,
+  enviarAvisoReservaPorEmail,
 } from "@/lib/email";
 
 // Extrae un detalle legible de cualquier error atrapado, para poder
@@ -211,6 +214,28 @@ export async function registrarPagoAction(formData: FormData): Promise<void> {
     revalidatePath("/propietario");
   } catch (e) {
     console.error("[registrarPagoAction] Error inesperado:", e);
+  }
+}
+
+export async function eliminarPagoAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    await requireAdmin();
+    const pagoId = String(formData.get("pagoId"));
+    if (!pagoId) {
+      return { ok: false, error: "Falta el id del pago a eliminar." };
+    }
+
+    await eliminarPago(pagoId);
+
+    revalidatePath("/admin/expensas");
+    revalidatePath("/propietario");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[eliminarPagoAction] Error inesperado:", e);
+    return {
+      ok: false,
+      error: "No se pudo eliminar el pago por un error inesperado en el servidor. Probá de nuevo en un minuto.",
+    };
   }
 }
 
@@ -763,7 +788,7 @@ export async function crearReservaAction(formData: FormData): Promise<ResultadoA
       return { ok: false, error: "Ese quincho ya está reservado para ese día y turno." };
     }
 
-    await prisma.reserva.create({
+    const reserva = await prisma.reserva.create({
       data: {
         quinchoId,
         fecha,
@@ -772,10 +797,43 @@ export async function crearReservaAction(formData: FormData): Promise<ResultadoA
         usuarioId: session.user.id,
         montoAplicado: MONTO_QUINCHO,
       },
+      include: { quincho: true, unidad: true },
     });
 
     revalidatePath("/propietario/reservas");
     revalidatePath("/admin/reservas");
+
+    try {
+      const admins = await prisma.usuario.findMany({
+        where: { rol: "ADMIN", activo: true },
+        select: { email: true },
+      });
+      const label = unidadLabel(reserva.unidad);
+
+      await Promise.all([
+        session.user.email
+          ? enviarConfirmacionReservaPorEmail({
+              to: session.user.email,
+              quinchoNombre: reserva.quincho.nombre,
+              fecha: reserva.fecha,
+              turno: reserva.turno,
+              unidadLabel: label,
+              montoAplicado: reserva.montoAplicado,
+            })
+          : Promise.resolve(),
+        enviarAvisoReservaPorEmail({
+          to: admins.map((a) => a.email),
+          quinchoNombre: reserva.quincho.nombre,
+          fecha: reserva.fecha,
+          turno: reserva.turno,
+          unidadLabel: label,
+        }),
+      ]);
+    } catch (e) {
+      // No bloqueamos la reserva si falla el envío de los emails de aviso.
+      console.error("[crearReservaAction] No se pudieron enviar los emails de aviso:", e);
+    }
+
     return { ok: true, data: undefined };
   } catch (e) {
     console.error("[crearReservaAction] Error inesperado:", e);
