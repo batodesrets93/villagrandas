@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import * as XLSX from "xlsx";
 import { registrarPagosMasivoAction } from "@/lib/actions";
 
 type CargoPago = {
@@ -32,7 +31,8 @@ export default function ImportarPagosForm({ cargos }: { cargos: CargoPago[] }) {
     return `${c.torre === "GRANDE" ? "TG" : "TC"} ${c.piso}º${c.depto}`;
   }
 
-  function exportarExcel() {
+  async function exportarExcel() {
+    const XLSX = await import("xlsx");
     const filas = cargos.map((c) => ({
       CargoId: c.id,
       Unidad: etiquetaUnidad(c),
@@ -68,6 +68,7 @@ export default function ImportarPagosForm({ cargos }: { cargos: CargoPago[] }) {
     setAviso("");
     setCargando(true);
     try {
+      const XLSX = await import("xlsx");
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: "array" });
       const ws = wb.Sheets["Pagos"];

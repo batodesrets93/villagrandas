@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import * as XLSX from "xlsx";
 import { calcularGasAction } from "@/lib/actions";
 
 type UnidadGas = {
@@ -63,7 +62,8 @@ export default function CalcularGasForm({
     return `${u.torre === "GRANDE" ? "TG" : "TC"} ${u.piso}º${u.depto} — ${u.titular}`;
   }
 
-  function exportarExcel() {
+  async function exportarExcel() {
+    const XLSX = await import("xlsx");
     const filasFacturas = [
       { Concepto: "Factura Torre Grande", Monto: facturaGrande ? parseNum(facturaGrande) : "" },
       { Concepto: "Factura Torre Chica", Monto: facturaChica ? parseNum(facturaChica) : "" },
@@ -101,6 +101,7 @@ export default function CalcularGasForm({
     setError("");
     setAviso("");
     try {
+      const XLSX = await import("xlsx");
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: "array" });
 

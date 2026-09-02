@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import * as XLSX from "xlsx";
 import { crearAccesoPropietarioAction } from "@/lib/actions";
 import DesarrolladorToggle from "./DesarrolladorToggle";
 
@@ -63,7 +62,8 @@ export default function UnidadesTable({
     });
   }, [busqueda, unidades]);
 
-  function exportarExcel() {
+  async function exportarExcel() {
+    const XLSX = await import("xlsx");
     const datos = filtradas.map((u) => ({
       Torre: u.torre === "GRANDE" ? "Grande" : "Chica",
       Piso: u.piso,
