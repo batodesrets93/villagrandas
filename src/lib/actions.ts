@@ -14,6 +14,7 @@ import {
   confirmarPagoInformado,
   rechazarPagoInformado,
   actualizarCalefaccion,
+  actualizarAjuste,
   calcularTotalM2Edificio,
   agruparM2ComplementariosPorUnidad,
   calcularGasPeriodo,
@@ -310,6 +311,25 @@ export async function actualizarCalefaccionAction(formData: FormData): Promise<v
   }
 }
 
+// Ajuste manual (positivo o negativo) sobre la liquidacion de una unidad
+// puntual: dias proporcionales por ingreso a mitad de mes, algo que se le
+// rompio y hay que cobrarle, un descuento por algo que pago en nombre del
+// consorcio, etc. El monto se escribe tal cual (con signo) en el campo, no
+// hace falta aclarar "-" para descuentos si el admin lo escribe como
+// negativo.
+export async function actualizarAjusteAction(formData: FormData): Promise<void> {
+  try {
+    await requireAdmin();
+    const cargoId = String(formData.get("cargoId"));
+    const ajuste = parseMonto(String(formData.get("ajuste")));
+    const conceptoRaw = String(formData.get("ajusteConcepto") ?? "").trim();
+    await actualizarAjuste(cargoId, ajuste, conceptoRaw === "" ? null : conceptoRaw);
+    revalidatePath("/admin/expensas");
+  } catch (e) {
+    console.error("[actualizarAjusteAction] Error inesperado:", e);
+  }
+}
+
 // Calcula el gas/calefacción del período a partir de las 2 facturas (Torre
 // Grande y Torre Chica) y la lectura actual de cada medidor, y reemplaza la
 // calefacción de cada unidad por el monto calculado (ver calcularGasPeriodo
@@ -460,6 +480,8 @@ export async function enviarLiquidacionesPorEmailAction(
           baulera: cargo.baulera,
           quincho: cargo.quincho,
           calefaccion: cargo.calefaccion,
+          ajuste: cargo.ajuste,
+          ajusteConcepto: cargo.ajusteConcepto,
           total: cargo.total,
           saldoAnterior: cargo.saldoAnterior,
           totalPagado: cargo.totalPagado,

@@ -216,6 +216,13 @@ model CargoUnidadPeriodo {
   baulera       Float          @default(0)
   quincho       Float          @default(0)
   calefaccion   Float          @default(0)
+  // Ajuste manual del admin sobre la liquidacion de esta unidad puntual (no
+  // afecta a las demas). Puede ser positivo (ej: se le rompio algo a la
+  // unidad y se le cobra) o negativo (ej: descuento por dias proporcionales
+  // de un ingreso a mitad de mes, o algo que el consorcio le debe). Se suma
+  // directo al total, por eso el signo importa.
+  ajuste        Float          @default(0)
+  ajusteConcepto String?
   total         Float
   saldoAnterior Float          @default(0)
   totalPagado   Float          @default(0)

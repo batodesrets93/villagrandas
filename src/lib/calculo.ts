@@ -201,6 +201,9 @@ export async function crearPeriodoYCalcular(params: {
 
     const total = gastoComun + cochera + baulera + quincho + calefaccion;
     const saldoActual = total + saldoAnterior;
+    // ajuste/ajusteConcepto arrancan en 0/null: son un valor que el admin
+    // carga a mano DESPUES de creado el periodo (igual que calefaccion),
+    // no algo que se calcule al generar el periodo.
 
     return {
       id: randomUUID(),
@@ -736,11 +739,29 @@ export async function calcularGasPeriodo(
 
 export async function actualizarCalefaccion(cargoId: string, calefaccion: number) {
   const cargo = await prisma.cargoUnidadPeriodo.findUniqueOrThrow({ where: { id: cargoId } });
-  const total = cargo.gastoComun + cargo.cochera + cargo.baulera + cargo.quincho + calefaccion;
+  const total = cargo.gastoComun + cargo.cochera + cargo.baulera + cargo.quincho + calefaccion + cargo.ajuste;
   const saldoActual = total + cargo.saldoAnterior - cargo.totalPagado;
   return prisma.cargoUnidadPeriodo.update({
     where: { id: cargoId },
     data: { calefaccion, total, saldoActual },
+  });
+}
+
+/**
+ * Carga/edita un ajuste manual sobre la liquidacion de UNA unidad puntual
+ * en un periodo (no recalcula nada de las demas unidades). El monto puede
+ * ser positivo (se le cobra algo extra a esa unidad, ej: rompio algo) o
+ * negativo (se le descuenta algo, ej: dias proporcionales por haber
+ * ingresado a mitad de mes, o algo que el consorcio le debe). El concepto
+ * es un texto libre para dejar constancia de por que se cargo.
+ */
+export async function actualizarAjuste(cargoId: string, ajuste: number, ajusteConcepto: string | null) {
+  const cargo = await prisma.cargoUnidadPeriodo.findUniqueOrThrow({ where: { id: cargoId } });
+  const total = cargo.gastoComun + cargo.cochera + cargo.baulera + cargo.quincho + cargo.calefaccion + ajuste;
+  const saldoActual = total + cargo.saldoAnterior - cargo.totalPagado;
+  return prisma.cargoUnidadPeriodo.update({
+    where: { id: cargoId },
+    data: { ajuste, ajusteConcepto, total, saldoActual },
   });
 }
 
@@ -818,7 +839,15 @@ export async function actualizarPeriodoYCalcular(
 
   const cargos = await prisma.cargoUnidadPeriodo.findMany({
     where: { periodoId },
-    select: { id: true, unidadId: true, quincho: true, calefaccion: true, saldoAnterior: true, totalPagado: true },
+    select: {
+      id: true,
+      unidadId: true,
+      quincho: true,
+      calefaccion: true,
+      ajuste: true,
+      saldoAnterior: true,
+      totalPagado: true,
+    },
   });
 
   // Recalcula gasto común, cochera, baulera y el total de cada unidad.
@@ -848,7 +877,7 @@ export async function actualizarPeriodoYCalcular(
     const gastoComun = totalGastos * (coeficientePorUnidad.get(cargo.unidadId) ?? 0);
     const cochera = cocheraPorUnidad.get(cargo.unidadId) ?? 0;
     const baulera = bauleraPorUnidad.get(cargo.unidadId) ?? 0;
-    const total = gastoComun + cochera + baulera + cargo.quincho + cargo.calefaccion;
+    const total = gastoComun + cochera + baulera + cargo.quincho + cargo.calefaccion + cargo.ajuste;
     const saldoActual = total + cargo.saldoAnterior - cargo.totalPagado;
 
     cargoIds.push(cargo.id);

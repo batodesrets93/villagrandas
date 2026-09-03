@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { registrarPagoAction, actualizarCalefaccionAction } from "@/lib/actions";
+import { registrarPagoAction, actualizarCalefaccionAction, actualizarAjusteAction } from "@/lib/actions";
 import { agruparM2ComplementariosPorUnidad, calcularTotalM2Edificio } from "@/lib/calculo";
 import EnviarEmailsButton from "@/components/EnviarEmailsButton";
 import ComprobantesGasto from "@/components/ComprobantesGasto";
@@ -110,6 +110,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
               <th title="(m² unidad + cochera + baulera) / m² total del edificio">% Incidencia total</th>
               <th>Quincho</th>
               <th>Calefacción</th>
+              <th title="Ajuste manual, positivo o negativo (dias proporcionales, roturas, descuentos, etc.)">Ajuste</th>
               <th>Total</th>
               <th>Saldo ant.</th>
               <th>Pagado</th>
@@ -145,7 +146,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                 <td>
                   {money(c.calefaccion)}
                   <details className="mt-1">
-                    <summary className="cursor-pointer text-xs text-gray-400">Ajuste manual</summary>
+                    <summary className="cursor-pointer text-xs text-gray-400">Corregir</summary>
                     <form action={actualizarCalefaccionAction} className="flex gap-1 mt-1">
                       <input type="hidden" name="cargoId" value={c.id} />
                       <input
@@ -153,6 +154,33 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                         defaultValue={c.calefaccion || ""}
                         placeholder="0"
                         className="w-20 text-xs"
+                      />
+                      <button className="btn btn-secondary text-xs px-2">OK</button>
+                    </form>
+                  </details>
+                </td>
+                <td className={c.ajuste < 0 ? "text-red-600" : c.ajuste > 0 ? "text-brand-700" : undefined}>
+                  {money(c.ajuste)}
+                  {c.ajusteConcepto && (
+                    <div className="text-xs text-gray-400 max-w-[8rem] truncate" title={c.ajusteConcepto}>
+                      {c.ajusteConcepto}
+                    </div>
+                  )}
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-xs text-gray-400">Cargar/editar</summary>
+                    <form action={actualizarAjusteAction} className="flex flex-col gap-1 mt-1 w-32">
+                      <input type="hidden" name="cargoId" value={c.id} />
+                      <input
+                        name="ajuste"
+                        defaultValue={c.ajuste || ""}
+                        placeholder="0 (+/-)"
+                        className="text-xs"
+                      />
+                      <input
+                        name="ajusteConcepto"
+                        defaultValue={c.ajusteConcepto ?? ""}
+                        placeholder="Concepto"
+                        className="text-xs"
                       />
                       <button className="btn btn-secondary text-xs px-2">OK</button>
                     </form>

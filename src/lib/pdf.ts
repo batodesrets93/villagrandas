@@ -6,6 +6,8 @@ type CargoConDatos = {
   baulera: number;
   quincho: number;
   calefaccion: number;
+  ajuste: number;
+  ajusteConcepto: string | null;
   total: number;
   saldoAnterior: number;
   totalPagado: number;
@@ -198,6 +200,7 @@ export async function generarPdfLiquidacion(
     cargo.baulera,
     cargo.quincho,
     cargo.calefaccion,
+    cargo.ajuste,
   ].filter((v) => v !== 0).length;
   const altoSeccionUnidad = 20 + 16 + 16 + 30 + 22 + filasConValor * 18 + 6 + 20 + 18 * 3 + 6 + 24 + 60;
   c.asegurarEspacio(altoSeccionUnidad);
@@ -229,6 +232,7 @@ export async function generarPdfLiquidacion(
     ["Baulera", cargo.baulera],
     ["Uso de quincho", cargo.quincho],
     ["Calefacción / agua caliente", cargo.calefaccion],
+    [cargo.ajusteConcepto ? `Ajuste: ${cargo.ajusteConcepto}` : "Ajuste", cargo.ajuste],
   ];
 
   for (const [label, valor] of filas) {

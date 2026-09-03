@@ -48,6 +48,8 @@ export async function GET(_req: NextRequest, { params }: { params: { cargoId: st
       baulera: cargo.baulera,
       quincho: cargo.quincho,
       calefaccion: cargo.calefaccion,
+      ajuste: cargo.ajuste,
+      ajusteConcepto: cargo.ajusteConcepto,
       total: cargo.total,
       saldoAnterior: cargo.saldoAnterior,
       totalPagado: cargo.totalPagado,
