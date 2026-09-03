@@ -458,7 +458,7 @@ export async function calcularGasPeriodo(
 
   const unidades = await prisma.unidad.findMany({
     where: { m2GasPonderado: { not: null } },
-    select: { id: true, torre: true, esEspacioComun: true, m2GasPonderado: true },
+    select: { id: true, torre: true, piso: true, depto: true, esEspacioComun: true, m2GasPonderado: true },
   });
 
   // Lectura anterior de cada unidad: la lecturaActual del periodo anterior
@@ -485,6 +485,36 @@ export async function calcularGasPeriodo(
     const anterior =
       lecturaAnteriorHistoricaPorUnidad.get(u.id) ?? lecturaAnteriorInicialPorUnidad.get(u.id) ?? 0;
     consumoPorUnidad.set(u.id, actual - anterior);
+  }
+
+  // Salvaguarda: un consumo negativo (lectura actual menor a la anterior)
+  // significa que se cargo mal una lectura -- el medidor de gas nunca
+  // "retrocede". Si esto pasa, la formula de reparto variable (55% de la
+  // factura repartido proporcional al consumo de cada unidad sobre el total
+  // de la torre) puede quedar dividiendo por una suma de consumos que da
+  // (casi) cero por cancelacion entre valores negativos y positivos, y ese
+  // cociente cercano a cero en el denominador puede disparar el resultado a
+  // un numero absurdo (paso real: en Agosto/2026 esto convirtio una factura
+  // de ~$1,5M en un cargo de ~$4.082.164.500.744.874 para "Agua caliente -
+  // espacios comunes", que se arrastro a gastoComun de las 81 unidades). Por
+  // eso se corta aca con un error claro en vez de guardar un calculo
+  // corrupto.
+  const unidadesConConsumoNegativo = unidades.filter((u) => (consumoPorUnidad.get(u.id) ?? 0) < 0);
+  if (unidadesConConsumoNegativo.length > 0) {
+    const detalle = unidadesConConsumoNegativo
+      .map((u) => {
+        const label = u.esEspacioComun ? "Pileta" : `${u.torre === "GRANDE" ? "TG" : "TC"} ${u.piso}º${u.depto}`;
+        const actual = lecturaActualPorUnidad.get(u.id) ?? 0;
+        const anterior =
+          lecturaAnteriorHistoricaPorUnidad.get(u.id) ?? lecturaAnteriorInicialPorUnidad.get(u.id) ?? 0;
+        return `${label} (anterior ${anterior}, actual ${actual})`;
+      })
+      .join("; ");
+    throw new Error(
+      `No se puede calcular el gas: ${unidadesConConsumoNegativo.length} unidad(es) con consumo negativo ` +
+        `(la lectura actual es menor a la anterior, algo imposible en un medidor real). Revisá esas lecturas ` +
+        `antes de volver a calcular: ${detalle}`
+    );
   }
 
   // ANTES: esto era un $transaction interactiva con ~79 upserts lanzados en
