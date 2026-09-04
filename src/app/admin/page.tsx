@@ -59,7 +59,7 @@ export default async function AdminDashboard() {
           <p className="text-2xl font-bold text-brand-700">{money(deudaTotal)}</p>
         </div>
         <div className="card">
-          <p className="text-sm text-gray-500">Reclamos pendientes</p>
+          <p className="text-sm text-gray-500">Reclamos/Sugerencias pendientes</p>
           <p className="text-2xl font-bold">{reclamosAbiertos}</p>
         </div>
       </div>
