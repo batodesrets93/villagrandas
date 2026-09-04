@@ -797,8 +797,31 @@ export async function crearReservaAction(formData: FormData): Promise<ResultadoA
       return { ok: false, error: "Elegí una fecha válida." };
     }
 
+    // La fecha llega como string "YYYY-MM-DD" (sin hora), que Date parsea
+    // como medianoche UTC. Comparar eso directamente contra "ahora" ignora
+    // por completo la hora de inicio del turno y la zona horaria de
+    // Argentina (UTC-3), lo que rechazaba reservas con mas de 24hs reales
+    // de anticipacion (ej. turno Noche del dia siguiente, que arranca a
+    // las 18:30 y no a medianoche). Se calcula el inicio real del turno en
+    // hora de Argentina para comparar correctamente.
+    const HORA_INICIO_TURNO: Record<"MEDIODIA" | "NOCHE", { hora: number; minuto: number }> = {
+      MEDIODIA: { hora: 9, minuto: 0 },
+      NOCHE: { hora: 18, minuto: 30 },
+    };
+    const OFFSET_ARGENTINA_HORAS = 3; // Argentina es UTC-3 todo el año (sin horario de verano)
+    const { hora: horaInicioTurno, minuto: minutoInicioTurno } = HORA_INICIO_TURNO[turno];
+    const inicioEvento = new Date(
+      Date.UTC(
+        fecha.getUTCFullYear(),
+        fecha.getUTCMonth(),
+        fecha.getUTCDate(),
+        horaInicioTurno + OFFSET_ARGENTINA_HORAS,
+        minutoInicioTurno
+      )
+    );
+
     const ahora = new Date();
-    const horasHastaEvento = (fecha.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+    const horasHastaEvento = (inicioEvento.getTime() - ahora.getTime()) / (1000 * 60 * 60);
     if (horasHastaEvento < 24) {
       return { ok: false, error: "Las reservas deben hacerse con un mínimo de 24 horas de anticipación." };
     }
