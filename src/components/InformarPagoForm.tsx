@@ -8,14 +8,18 @@ const MEDIOS = ["Transferencia", "Depósito", "Efectivo", "Otro"];
 
 // Formatea lo que el usuario va tipeando como monto en pesos argentinos:
 // punto como separador de miles, coma como separador decimal (máx. 2 dígitos).
-// El valor resultante (sin el "$ ") sigue siendo compatible con parseMonto
-// en actions.ts, que ya sabe interpretar ese formato.
+// Acepta que el usuario tipee "," O "." para marcar los decimales: el primer
+// separador que aparezca (sea cual sea) se toma como el decimal, y cualquier
+// otro punto/coma posterior se descarta. El valor resultante (sin el "$ ")
+// sigue siendo compatible con parseMonto en actions.ts.
 function formatearMontoInput(valor: string): string {
-  let limpio = valor.replace(/[^\d,]/g, "");
+  let limpio = valor.replace(/[^\d.,]/g, "");
 
-  const primeraComa = limpio.indexOf(",");
-  if (primeraComa !== -1) {
-    limpio = limpio.slice(0, primeraComa + 1) + limpio.slice(primeraComa + 1).replace(/,/g, "");
+  const primerSeparador = limpio.search(/[.,]/);
+  if (primerSeparador !== -1) {
+    const entero = limpio.slice(0, primerSeparador).replace(/[.,]/g, "");
+    const decimales = limpio.slice(primerSeparador + 1).replace(/[.,]/g, "");
+    limpio = ⁠ ${entero},${decimales} ⁠;
   }
 
   const [enteroRaw, decimalRaw] = limpio.split(",");
@@ -24,7 +28,7 @@ function formatearMontoInput(valor: string): string {
 
   const enteroFormateado = entero ? entero.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
 
-  if (decimal !== undefined) return `${enteroFormateado},${decimal}`;
+  if (decimal !== undefined) return ⁠ ${enteroFormateado},${decimal} ⁠;
   return enteroFormateado;
 }
 
