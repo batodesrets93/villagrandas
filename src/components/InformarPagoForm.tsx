@@ -19,7 +19,7 @@ function formatearMontoInput(valor: string): string {
   if (primerSeparador !== -1) {
     const entero = limpio.slice(0, primerSeparador).replace(/[.,]/g, "");
     const decimales = limpio.slice(primerSeparador + 1).replace(/[.,]/g, "");
-    limpio = ⁠ ${entero},${decimales} ⁠;
+    limpio = `${entero},${decimales}`;
   }
 
   const [enteroRaw, decimalRaw] = limpio.split(",");
@@ -28,7 +28,7 @@ function formatearMontoInput(valor: string): string {
 
   const enteroFormateado = entero ? entero.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
 
-  if (decimal !== undefined) return ⁠ ${enteroFormateado},${decimal} ⁠;
+  if (decimal !== undefined) return `${enteroFormateado},${decimal}`;
   return enteroFormateado;
 }
 
