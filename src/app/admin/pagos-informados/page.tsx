@@ -128,15 +128,31 @@ export default async function PagosInformadosPage() {
         {resueltos.length === 0 && <p className="text-sm text-gray-400">Todavía no hay pagos resueltos.</p>}
         <div className="space-y-2">
           {resueltos.map((p: PagoInformadoConDetalle) => (
-            <div
-              key={p.id}
-              className="flex items-center justify-between text-sm border-t border-gray-100 pt-2 flex-wrap gap-1"
-            >
-              <span>
-                {unidadLabel(p.cargo.unidad)} · {p.cargo.periodo.etiqueta} · {money(p.monto)}
-                {p.notaAdmin && <span className="text-gray-400"> · {p.notaAdmin}</span>}
-              </span>
-              <span className={`text-xs px-2 py-1 rounded-full ${badgeEstado[p.estado]}`}>{p.estado}</span>
+            <div key={p.id} className="border-t border-gray-100 pt-2">
+              <div className="flex items-center justify-between text-sm flex-wrap gap-1">
+                <span>
+                  {unidadLabel(p.cargo.unidad)} · {p.cargo.periodo.etiqueta} · {money(p.monto)}
+                  {p.notaAdmin && <span className="text-gray-400"> · {p.notaAdmin}</span>}
+                </span>
+                <span className={`text-xs px-2 py-1 rounded-full ${badgeEstado[p.estado]}`}>{p.estado}</span>
+              </div>
+              {p.comprobantes.length > 0 && (
+                <ul className="flex flex-wrap gap-2 mt-1">
+                  {p.comprobantes.map((c: PagoInformadoConDetalle["comprobantes"][number]) => (
+                    <li key={c.id}>
+                      <a
+                        href={`/api/pagos-informados-adjuntos/${c.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-brand-600 underline"
+                        title={c.nombreArchivo}
+                      >
+                        📎 {c.nombreArchivo}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           ))}
         </div>
