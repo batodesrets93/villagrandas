@@ -5,7 +5,7 @@ export default function NavPropietario() {
   const links = [
     { href: "/propietario", label: "Mi cuenta" },
     { href: "/propietario/reservas", label: "Reservar quincho" },
-    { href: "/propietario/reclamos", label: "Reclamos" },
+    { href: "/propietario/reclamos", label: "Reclamos/Sugerencias" },
   ];
   return (
     <nav className="bg-brand-700 text-white">
