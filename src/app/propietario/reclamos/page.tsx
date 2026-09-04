@@ -26,7 +26,7 @@ export default async function ReclamosPropietarioPage() {
   const reclamos = await prisma.reclamo.findMany({
     where: { unidadId: session!.user.unidadId! },
     orderBy: { createdAt: "desc" },
-    include: { adjuntos: true },
+    include: { adjuntos: { select: { id: true, nombreArchivo: true } } },
   });
 
   return (

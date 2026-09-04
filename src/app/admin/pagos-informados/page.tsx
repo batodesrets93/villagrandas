@@ -33,7 +33,7 @@ async function rechazarWrapper(formData: FormData) {
 
 const includePago = {
   cargo: { include: { unidad: true, periodo: true } },
-  comprobantes: true,
+  comprobantes: { select: { id: true, nombreArchivo: true } },
 } as const;
 
 function fetchPendientes() {

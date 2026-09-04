@@ -22,7 +22,7 @@ const categoriaLabel: Record<string, string> = {
 export default async function ReclamosAdminPage() {
   const reclamos = await prisma.reclamo.findMany({
     orderBy: { createdAt: "desc" },
-    include: { unidad: true, usuario: true, adjuntos: true },
+    include: { unidad: true, usuario: true, adjuntos: { select: { id: true, nombreArchivo: true } } },
   });
 
   return (

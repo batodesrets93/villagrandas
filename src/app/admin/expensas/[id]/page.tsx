@@ -24,7 +24,10 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
   const periodo = await prisma.periodoExpensa.findUniqueOrThrow({
     where: { id: params.id },
     include: {
-      gastos: { orderBy: { orden: "asc" }, include: { comprobantes: true } },
+      gastos: {
+        orderBy: { orden: "asc" },
+        include: { comprobantes: { select: { id: true, nombreArchivo: true, tipoArchivo: true, tamanio: true } } },
+      },
       cargos: { include: { unidad: true, pagos: true }, orderBy: [{ unidad: { torre: "asc" } }, { unidad: { piso: "asc" } }, { unidad: { depto: "asc" } }] },
     },
   });
