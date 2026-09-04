@@ -9,7 +9,7 @@ export default function NavAdmin() {
     { href: "/admin/expensas", label: "Expensas" },
     { href: "/admin/pagos-informados", label: "Pagos informados" },
     { href: "/admin/reservas", label: "Reservas" },
-    { href: "/admin/reclamos", label: "Reclamos" },
+    { href: "/admin/reclamos", label: "Reclamos/Sugerencias" },
   ];
   return (
     <nav className="bg-brand-700 text-white overflow-x-hidden">
