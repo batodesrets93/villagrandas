@@ -39,7 +39,7 @@ function detalleError(e: unknown): string {
   if (e && typeof e === "object") {
     const code = "code" in e ? String((e as { code: unknown }).code) : undefined;
     const message = "message" in e ? String((e as { message: unknown }).message) : undefined;
-    if (code && message) return `${code}: ${message}`;
+    if (code && message) return ⁠ ${code}: ${message} ⁠;
     if (message) return message;
   }
   return String(e);
@@ -96,6 +96,22 @@ async function requirePropietario() {
   return session;
 }
 
+/**
+ * Direcciones a las que se avisa cuando un propietario informa un pago o
+ * reserva un quincho. Deliberadamente NO se buscan usuarios con rol ADMIN
+ * en la base: el email de login de un admin puede no ser una casilla real
+ * (o puede coincidir con el email de un propietario, que ya está en uso por
+ * otra fila de Usuario y no se puede repetir). Se configura aparte, en
+ * ADMIN_NOTIFY_EMAIL (una o varias direcciones separadas por coma).
+ */
+function emailsAvisoAdmin(): string[] {
+  const raw = process.env.ADMIN_NOTIFY_EMAIL || "";
+  return raw
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean);
+}
+
 // ---------- ADMIN: expensas ----------
 
 type ResultadoAccion<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
@@ -104,7 +120,7 @@ type ResultadoAccion<T = undefined> = { ok: true; data: T } | { ok: false; error
 // de cualquier error que se "lance" (throw) desde una Server Action, y lo
 // reemplaza por el texto generico "An error occurred in the Server
 // Components render...". Por eso estas acciones NO lanzan errores de
-// validacion: los devuelven como dato (`{ ok: false, error: "..." }`), y el
+// validacion: los devuelven como dato (⁠ { ok: false, error: "..." } ⁠), y el
 // componente que las llama decide que mostrar. Los errores realmente
 // inesperados se registran con console.error (visibles en los logs de
 // Vercel) y se devuelve un mensaje generico pero legible.
@@ -186,7 +202,7 @@ export async function actualizarPeriodoAction(formData: FormData): Promise<Resul
     await actualizarPeriodoYCalcular(periodoId, { etiqueta, fechaInicio, fechaFin, vencimiento, categorias });
 
     revalidatePath("/admin/expensas");
-    revalidatePath(`/admin/expensas/${periodoId}`);
+    revalidatePath(⁠ /admin/expensas/${periodoId} ⁠);
     revalidatePath("/propietario");
     return { ok: true, data: { id: periodoId } };
   } catch (e) {
@@ -272,7 +288,7 @@ export async function registrarPagosMasivoAction(
         cantidad++;
       } catch (e) {
         omitidos++;
-        if (detalleErrores.length < 5) detalleErrores.push(`Unidad (id ${cargoId}): ${detalleError(e)}`);
+        if (detalleErrores.length < 5) detalleErrores.push(⁠ Unidad (id ${cargoId}): ${detalleError(e)} ⁠);
       }
     }
 
@@ -284,7 +300,7 @@ export async function registrarPagosMasivoAction(
         ok: false,
         error:
           detalleErrores.length > 0
-            ? `No se pudo registrar ningún pago. ${detalleErrores.join(" · ")}`
+            ? ⁠ No se pudo registrar ningún pago. ${detalleErrores.join(" · ")} ⁠
             : "No había pagos válidos para registrar: completá la columna Monto con un número mayor a 0 en al menos una fila.",
       };
     }
@@ -361,8 +377,8 @@ export async function calcularGasAction(formData: FormData): Promise<ResultadoAc
 
     await calcularGasPeriodo(periodoId, { facturaGasTorreGrande, facturaGasTorreChica, lecturas });
 
-    revalidatePath(`/admin/expensas/${periodoId}`);
-    revalidatePath(`/admin/expensas/${periodoId}/gas`);
+    revalidatePath(⁠ /admin/expensas/${periodoId} ⁠);
+    revalidatePath(⁠ /admin/expensas/${periodoId}/gas ⁠);
     return { ok: true, data: { id: periodoId } };
   } catch (e) {
     console.error("[calcularGasAction] Error inesperado:", e);
@@ -370,7 +386,7 @@ export async function calcularGasAction(formData: FormData): Promise<ResultadoAc
       ok: false,
       error:
         "No se pudo calcular el gas por un error inesperado en el servidor. Probá de nuevo en un minuto; si se repite, revisá los logs de Vercel (pestaña Logs del proyecto) para ver el detalle. " +
-        `Detalle: ${detalleError(e)}`,
+        ⁠ Detalle: ${detalleError(e)} ⁠,
     };
   }
 }
@@ -408,14 +424,14 @@ export async function eliminarPeriodoAction(formData: FormData): Promise<Resulta
 }
 
 function unidadLabel(u: { torre: "GRANDE" | "CHICA"; piso: string; depto: string }) {
-  return `${u.torre === "GRANDE" ? "TG" : "TC"} ${u.piso}º${u.depto}`;
+  return ⁠ ${u.torre === "GRANDE" ? "TG" : "TC"} ${u.piso}º${u.depto} ⁠;
 }
 
 /**
  * Genera el PDF de liquidación de cada unidad (o de una sola, si se pasa
- * `cargoId`) y lo envía por email a las direcciones registradas de esa
+ * ⁠ cargoId ⁠) y lo envía por email a las direcciones registradas de esa
  * unidad (los emails con los que sus propietarios tienen acceso al sitio).
- * Las unidades sin ningún usuario con acceso creado se listan en `sinEmail`
+ * Las unidades sin ningún usuario con acceso creado se listan en ⁠ sinEmail ⁠
  * para que el admin sepa a quién le falta cargar el acceso.
  */
 export async function enviarLiquidacionesPorEmailAction(
@@ -490,7 +506,7 @@ export async function enviarLiquidacionesPorEmailAction(
         totalM2Edificio
       );
 
-      const nombreArchivo = `expensa_${cargo.unidad.piso}${cargo.unidad.depto}_${periodo.etiqueta.replace(/\s+/g, "_")}.pdf`;
+      const nombreArchivo = ⁠ expensa_${cargo.unidad.piso}${cargo.unidad.depto}_${periodo.etiqueta.replace(/\s+/g, "_")}.pdf ⁠;
 
       for (const email of emails) {
         await enviarLiquidacionPorEmail({
@@ -561,7 +577,7 @@ export async function subirComprobanteAction(formData: FormData): Promise<Result
       },
     });
 
-    revalidatePath(`/admin/expensas/${gasto.periodoId}`);
+    revalidatePath(⁠ /admin/expensas/${gasto.periodoId} ⁠);
     revalidatePath("/propietario");
     return { ok: true, data: undefined };
   } catch (e) {
@@ -588,7 +604,7 @@ export async function eliminarComprobanteAction(formData: FormData): Promise<Res
 
     await prisma.comprobante.delete({ where: { id: comprobanteId } });
 
-    revalidatePath(`/admin/expensas/${comprobante.gasto.periodoId}`);
+    revalidatePath(⁠ /admin/expensas/${comprobante.gasto.periodoId} ⁠);
     revalidatePath("/propietario");
     return { ok: true, data: undefined };
   } catch (e) {
@@ -681,7 +697,7 @@ export async function actualizarTitularAction(formData: FormData) {
   });
 
   revalidatePath("/admin/unidades");
-  revalidatePath(`/admin/unidades/${unidadId}`);
+  revalidatePath(⁠ /admin/unidades/${unidadId} ⁠);
 }
 
 /**
@@ -849,10 +865,6 @@ export async function crearReservaAction(formData: FormData): Promise<ResultadoA
     revalidatePath("/admin/reservas");
 
     try {
-      const admins = await prisma.usuario.findMany({
-        where: { rol: "ADMIN", activo: true },
-        select: { email: true },
-      });
       const label = unidadLabel(reserva.unidad);
 
       await Promise.all([
@@ -867,7 +879,7 @@ export async function crearReservaAction(formData: FormData): Promise<ResultadoA
             })
           : Promise.resolve(),
         enviarAvisoReservaPorEmail({
-          to: admins.map((a) => a.email),
+          to: emailsAvisoAdmin(),
           quinchoNombre: reserva.quincho.nombre,
           fecha: reserva.fecha,
           turno: reserva.turno,
@@ -1037,14 +1049,14 @@ export async function informarPagoAction(formData: FormData): Promise<ResultadoA
       return { ok: false, error: "Adjuntá al menos un comprobante." };
     }
     if (archivos.length > MAX_ADJUNTOS_PAGO) {
-      return { ok: false, error: `Podés adjuntar hasta ${MAX_ADJUNTOS_PAGO} archivos.` };
+      return { ok: false, error: ⁠ Podés adjuntar hasta ${MAX_ADJUNTOS_PAGO} archivos. ⁠ };
     }
     for (const archivo of archivos) {
       if (!TIPOS_ADJUNTO_PAGO_PERMITIDOS.includes(archivo.type)) {
-        return { ok: false, error: `${archivo.name}: solo se aceptan archivos PDF, JPG, PNG o WEBP.` };
+        return { ok: false, error: ⁠ ${archivo.name}: solo se aceptan archivos PDF, JPG, PNG o WEBP. ⁠ };
       }
       if (archivo.size > TAMANIO_MAXIMO_ADJUNTO_PAGO) {
-        return { ok: false, error: `${archivo.name}: el archivo no puede superar los 8 MB.` };
+        return { ok: false, error: ⁠ ${archivo.name}: el archivo no puede superar los 8 MB. ⁠ };
       }
     }
 
@@ -1069,14 +1081,12 @@ export async function informarPagoAction(formData: FormData): Promise<ResultadoA
     revalidatePath("/admin/pagos-informados");
 
     try {
-      const [unidad, admins] = await Promise.all([
-        prisma.unidad.findUnique({ where: { id: session.user.unidadId! } }),
-        prisma.usuario.findMany({ where: { rol: "ADMIN", activo: true }, select: { email: true } }),
-      ]);
-      if (unidad && admins.length > 0) {
+      const unidad = await prisma.unidad.findUnique({ where: { id: session.user.unidadId! } });
+      const destinatarios = emailsAvisoAdmin();
+      if (unidad && destinatarios.length > 0) {
         await enviarAvisoPagoInformadoPorEmail({
-          to: admins.map((a) => a.email),
-          unidadLabel: `${unidad.torre === "GRANDE" ? "Torre Grande" : "Torre Chica"} - Piso ${unidad.piso} Depto ${unidad.depto}`,
+          to: destinatarios,
+          unidadLabel: ⁠ ${unidad.torre === "GRANDE" ? "Torre Grande" : "Torre Chica"} - Piso ${unidad.piso} Depto ${unidad.depto} ⁠,
           monto,
         });
       }
@@ -1163,14 +1173,14 @@ export async function crearReclamoAction(formData: FormData): Promise<ResultadoA
       .filter((a): a is File => a instanceof File && a.size > 0);
 
     if (archivos.length > MAX_ADJUNTOS_RECLAMO) {
-      return { ok: false, error: `Podés adjuntar hasta ${MAX_ADJUNTOS_RECLAMO} archivos.` };
+      return { ok: false, error: ⁠ Podés adjuntar hasta ${MAX_ADJUNTOS_RECLAMO} archivos. ⁠ };
     }
     for (const archivo of archivos) {
       if (!TIPOS_ADJUNTO_RECLAMO_PERMITIDOS.includes(archivo.type)) {
-        return { ok: false, error: `${archivo.name}: solo se aceptan archivos PDF, JPG, PNG o WEBP.` };
+        return { ok: false, error: ⁠ ${archivo.name}: solo se aceptan archivos PDF, JPG, PNG o WEBP. ⁠ };
       }
       if (archivo.size > TAMANIO_MAXIMO_ADJUNTO_RECLAMO) {
-        return { ok: false, error: `${archivo.name}: el archivo no puede superar los 8 MB.` };
+        return { ok: false, error: ⁠ ${archivo.name}: el archivo no puede superar los 8 MB. ⁠ };
       }
     }
 
