@@ -13,8 +13,12 @@ export default function NuevaReservaForm({ quinchos }: { quinchos: { id: string;
     setError("");
     setCargando(true);
     try {
-      await crearReservaAction(formData);
-      router.refresh();
+      const resultado = await crearReservaAction(formData);
+      if (resultado.ok) {
+        router.refresh();
+      } else {
+        setError(resultado.error);
+      }
     } catch (e: any) {
       setError(e.message ?? "No se pudo crear la reserva");
     } finally {

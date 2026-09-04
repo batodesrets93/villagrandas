@@ -8,7 +8,7 @@ import NuevaReservaForm from "./NuevaReservaForm";
 
 const INFO_QUINCHO: Record<string, string> = {
   Amparo: "Capacidad 12 personas · sin acceso a piscina",
-  Eva: "Capacidad 24 personas · con acceso a piscina",
+  Eva: "Capacidad 24 personas · sin acceso a piscina",
   Amado: "Capacidad 18 personas · sin acceso a piscina",
 };
 
@@ -64,7 +64,7 @@ export default async function ReservasPropietarioPage({
           <li>Turno mediodía: 9:00 a 15:30 (hasta 16:30 si no se usa el turno siguiente).</li>
           <li>Turno noche: 18:30 a 0:30 (2:00 am viernes, sábados y vísperas de feriado).</li>
           <li>No se pueden usar equipos de música ni parlantes (solo auriculares).</li>
-          <li>Usando "Amado" o "Amparo" no se puede usar la piscina.</li>
+          <li>Ningún quincho tiene acceso a la piscina.</li>
         </ul>
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-gray-500">
           {quinchos.map((q) => (
