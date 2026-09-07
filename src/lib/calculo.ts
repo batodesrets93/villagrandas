@@ -585,18 +585,30 @@ export async function calcularGasPeriodo(
   }
 
   // La pileta se agrega/actualiza como una categoria de gasto comun mas.
+  // IMPORTANTE: se redondea a 2 decimales antes de guardar. costoPiscina sale
+  // de sumar fijo+variable (floats de JS), lo que da numeros con muchisimos
+  // decimales (ej: 74129.65989809121). Si eso se guarda tal cual, la proxima
+  // vez que se edita el periodo desde la pantalla general de categorias,
+  // parseMonto() (en actions.ts) interpreta ese punto como separador de
+  // miles (porque tiene mas de 2 decimales) y lo borra, convirtiendo
+  // "74129.65989809121" en el entero gigante "7412965989809121". Redondear
+  // aca evita que ese numero con cola larga de decimales llegue a existir.
+  const costoPiscinaRedondeado = Math.round(costoPiscina * 100) / 100;
   const categoriasActuales = await prisma.gastoCategoria.findMany({ where: { periodoId } });
   const categoriaPiscina = categoriasActuales.find(
     (g) => g.nombre.trim().toLowerCase() === "agua caliente - espacios comunes"
   );
   if (categoriaPiscina) {
-    await prisma.gastoCategoria.update({ where: { id: categoriaPiscina.id }, data: { monto: costoPiscina } });
+    await prisma.gastoCategoria.update({
+      where: { id: categoriaPiscina.id },
+      data: { monto: costoPiscinaRedondeado },
+    });
   } else {
     await prisma.gastoCategoria.create({
       data: {
         periodoId,
         nombre: "Agua caliente - espacios comunes",
-        monto: costoPiscina,
+        monto: costoPiscinaRedondeado,
         orden: categoriasActuales.length,
       },
     });
@@ -734,7 +746,7 @@ export async function calcularGasPeriodo(
     await prisma.$transaction(queries);
   }
 
-  return { costoPiscina, totalGastos };
+  return { costoPiscina: costoPiscinaRedondeado, totalGastos };
 }
 
 export async function actualizarCalefaccion(cargoId: string, calefaccion: number) {
