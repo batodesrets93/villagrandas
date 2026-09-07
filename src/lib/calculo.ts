@@ -13,38 +13,60 @@ type CategoriaInput = {
 };
 
 /**
+ * Identifica las categorias de "Gas" (las dos facturas, Torre Grande y
+ * Torre Chica). Esas facturas NUNCA se reparten por coeficiente: se
+ * cobran aparte, por consumo individual (CargoUnidadPeriodo.calefaccion),
+ * y la porcion de la pileta (espacio comun, no factura a nadie) vuelve a
+ * entrar sola como la categoria "Agua caliente - espacios comunes".
+ */
+function esCategoriaGas(nombre: string): boolean {
+  return nombre.trim().toLowerCase() === "gas";
+}
+
+/**
+ * Total de gastos a prorratear por coeficiente (gasto comun de deptos,
+ * cocheras y bauleras): el total de categorias del periodo EXCLUYENDO las
+ * categorias "Gas".
+ *
+ * Bug detectado en Agosto/2026 comparando contra la planilla del
+ * administrador externo: si no se excluye la categoria "Gas" acá, su
+ * importe (la factura completa) queda contado en el pool que se reparte
+ * por coeficiente, Y la porcion de la pileta dentro de esa misma factura
+ * se vuelve a sumar aparte como "Agua caliente - espacios comunes" (ver
+ * calcularGasPeriodo) — la porcion de la pileta terminaba cobrada DOS
+ * veces, e inflaba el gasto comun y el monto por m2 de cocheras/bauleras
+ * de las 79 unidades por igual (le pego a todos, no solo a Costa
+ * Tranvial). El administrador externo directamente nunca mete la factura
+ * de gas en este total (ver PDF: TOTAL DEPTO = TOTAL GASTOS - CALEF/AGUA
+ * CALIENTE); acá se logra lo mismo excluyendo la categoria por nombre en
+ * vez de restar despues un total parcial de calefaccion ya facturada.
+ */
+function totalGastosProrrateables(categorias: { nombre: string; monto: number }[]): number {
+  return categorias.reduce((acc, c) => (esCategoriaGas(c.nombre) ? acc : acc + c.monto), 0);
+}
+
+/**
  * Gasto comun de UNA unidad: su coeficiente sobre el total de las
- * categorias de gasto, salvo que una categoria excluya a las unidades
- * esDesarrollador (ej: Honorarios de Administracion no se le cobra a Costa
- * Tranvial) y esta unidad lo sea, en cuyo caso esa categoria puntual no
- * suma. NO se redistribuye la porcion excluida entre las demas unidades:
- * cada propietario sigue pagando exactamente su propio coeficiente sobre
- * el total de cada categoria que si le corresponde, igual que hace el
+ * categorias de gasto (sin contar "Gas", ver totalGastosProrrateables),
+ * salvo que una categoria excluya a las unidades esDesarrollador (ej:
+ * Honorarios de Administracion no se le cobra a Costa Tranvial) y esta
+ * unidad lo sea, en cuyo caso esa categoria puntual no suma. NO se
+ * redistribuye la porcion excluida entre las demas unidades: cada
+ * propietario sigue pagando exactamente su propio coeficiente sobre el
+ * total de cada categoria que si le corresponde, igual que hace el
  * administrador externo en su planilla (por eso el total recaudado en una
  * categoria excluyente queda por debajo de su monto nominal).
- *
- * totalCalefaccionFacturada: la calefaccion/agua caliente de cada unidad
- * ya se cobra aparte, por consumo individual (campo CargoUnidadPeriodo.
- * calefaccion), a partir de las MISMAS facturas de gas que tambien entran
- * como categoria de gasto comun ("Gas"). Sin este ajuste, esa factura se
- * cobraria dos veces: una repartida por coeficiente ac,a y otra por
- * consumo individual. El administrador externo evita esto restando del
- * total a repartir por coeficiente el total ya facturado por calefaccion
- * (ver PDF: TOTAL DEPTO = TOTAL GASTOS - CALEF/AGUA CALIENTE). Se resta
- * ANTES de multiplicar por el coeficiente, y por igual para todas las
- * unidades (esto no depende de si son esDesarrollador o no).
  */
 function calcularGastoComunUnidad(
-  categorias: { monto: number; excluyeDesarrollador?: boolean }[],
+  categorias: { nombre: string; monto: number; excluyeDesarrollador?: boolean }[],
   coeficiente: number,
-  esDesarrollador: boolean,
-  totalCalefaccionFacturada: number = 0
+  esDesarrollador: boolean
 ): number {
-  const base = categorias.reduce((acc, c) => {
+  return categorias.reduce((acc, c) => {
+    if (esCategoriaGas(c.nombre)) return acc;
     if (c.excluyeDesarrollador && esDesarrollador) return acc;
     return acc + c.monto * coeficiente;
   }, 0);
-  return base - totalCalefaccionFacturada * coeficiente;
 }
 
 type CargoComplementarioIndividual = {
@@ -188,7 +210,7 @@ export async function crearPeriodoYCalcular(params: {
   });
 
   const { cocheraPorUnidad, bauleraPorUnidad, cocherasIndividuales, baulerasIndividuales } =
-    await calcularComplementarios(totalGastos);
+    await calcularComplementarios(totalGastosProrrateables(params.categorias));
 
   // Se trae tambien montoAplicado: el precio del quincho puede cambiar con
   // el tiempo, y cada reserva "congela" el precio vigente al momento de
@@ -663,7 +685,7 @@ export async function calcularGasPeriodo(
   await prisma.periodoExpensa.update({ where: { id: periodoId }, data: { totalGastos } });
 
   const { cocheraPorUnidad, bauleraPorUnidad, cocherasIndividuales, baulerasIndividuales } =
-    await calcularComplementarios(totalGastos);
+    await calcularComplementarios(totalGastosProrrateables(categorias));
 
   const cargos = await prisma.cargoUnidadPeriodo.findMany({
     where: { periodoId },
@@ -691,16 +713,6 @@ export async function calcularGasPeriodo(
   const coeficientePorUnidad = new Map(unidadesCoef.map((u) => [u.id, u.coeficiente]));
   const esDesarrolladorPorUnidad = new Map(unidadesCoef.map((u) => [u.id, u.esDesarrollador]));
 
-  // Total de calefaccion que se le va a facturar a las unidades este
-  // periodo (recien calculado arriba, a partir de la MISMA factura de gas
-  // que tambien esta cargada como categoria de gasto comun "Gas"). Se resta
-  // del monto a repartir por coeficiente para no cobrarla dos veces (ver
-  // el comentario de calcularGastoComunUnidad).
-  const totalCalefaccionFacturada = cargos.reduce(
-    (acc, c) => acc + (gasPorUnidad.get(c.unidadId) ?? 0),
-    0
-  );
-
   const cargoIds: string[] = [];
   const gastoComunes: number[] = [];
   const cocheraMontos: number[] = [];
@@ -713,8 +725,7 @@ export async function calcularGasPeriodo(
     const gastoComun = calcularGastoComunUnidad(
       categorias,
       coeficientePorUnidad.get(cargo.unidadId) ?? 0,
-      esDesarrolladorPorUnidad.get(cargo.unidadId) ?? false,
-      totalCalefaccionFacturada
+      esDesarrolladorPorUnidad.get(cargo.unidadId) ?? false
     );
     const cochera = cocheraPorUnidad.get(cargo.unidadId) ?? 0;
     const baulera = bauleraPorUnidad.get(cargo.unidadId) ?? 0;
@@ -912,7 +923,7 @@ export async function actualizarPeriodoYCalcular(
   }
 
   const { cocheraPorUnidad, bauleraPorUnidad, cocherasIndividuales, baulerasIndividuales } =
-    await calcularComplementarios(totalGastos);
+    await calcularComplementarios(totalGastosProrrateables(params.categorias));
 
   const cargos = await prisma.cargoUnidadPeriodo.findMany({
     where: { periodoId },
@@ -944,14 +955,6 @@ export async function actualizarPeriodoYCalcular(
   const coeficientePorUnidad = new Map(unidadesCoef.map((u) => [u.id, u.coeficiente]));
   const esDesarrolladorPorUnidad = new Map(unidadesCoef.map((u) => [u.id, u.esDesarrollador]));
 
-  // Total de calefaccion YA facturada a las unidades en este periodo (la
-  // carga la pantalla de Gas por separado). Se resta del monto a repartir
-  // por coeficiente para no cobrar la misma factura de gas dos veces (ver
-  // el comentario de calcularGastoComunUnidad). Si todavia no se calculo
-  // el gas de este periodo, cargo.calefaccion es 0 para todos y esto no
-  // resta nada.
-  const totalCalefaccionFacturada = cargos.reduce((acc, c) => acc + c.calefaccion, 0);
-
   const cargoIds: string[] = [];
   const gastoComunes: number[] = [];
   const cocheraMontos: number[] = [];
@@ -963,8 +966,7 @@ export async function actualizarPeriodoYCalcular(
     const gastoComun = calcularGastoComunUnidad(
       params.categorias,
       coeficientePorUnidad.get(cargo.unidadId) ?? 0,
-      esDesarrolladorPorUnidad.get(cargo.unidadId) ?? false,
-      totalCalefaccionFacturada
+      esDesarrolladorPorUnidad.get(cargo.unidadId) ?? false
     );
     const cochera = cocheraPorUnidad.get(cargo.unidadId) ?? 0;
     const baulera = bauleraPorUnidad.get(cargo.unidadId) ?? 0;
