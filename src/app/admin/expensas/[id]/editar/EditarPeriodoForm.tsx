@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { actualizarPeriodoAction } from "@/lib/actions";
 
-type Categoria = { nombre: string; monto: string; fondo: boolean };
-type Item = { monto: string; fondo: boolean };
+type Categoria = { nombre: string; monto: string; fondo: boolean; excluyeDesarrollador: boolean };
+type Item = { monto: string; fondo: boolean; excluyeDesarrollador: boolean };
 type Grupo = { nombre: string; items: Item[] };
 
 // Agrupa la lista plana que viene de la base (un registro GastoCategoria por
@@ -19,14 +19,19 @@ function agruparCategorias(categorias: Categoria[]): Grupo[] {
   for (const c of categorias) {
     const existente = indicePorNombre.get(c.nombre);
     if (existente !== undefined) {
-      grupos[existente].items.push({ monto: c.monto, fondo: c.fondo });
+      grupos[existente].items.push({ monto: c.monto, fondo: c.fondo, excluyeDesarrollador: c.excluyeDesarrollador });
     } else {
       indicePorNombre.set(c.nombre, grupos.length);
-      grupos.push({ nombre: c.nombre, items: [{ monto: c.monto, fondo: c.fondo }] });
+      grupos.push({
+        nombre: c.nombre,
+        items: [{ monto: c.monto, fondo: c.fondo, excluyeDesarrollador: c.excluyeDesarrollador }],
+      });
     }
   }
 
-  return grupos.length > 0 ? grupos : [{ nombre: "", items: [{ monto: "", fondo: false }] }];
+  return grupos.length > 0
+    ? grupos
+    : [{ nombre: "", items: [{ monto: "", fondo: false, excluyeDesarrollador: false }] }];
 }
 
 export default function EditarPeriodoForm({
@@ -53,7 +58,12 @@ export default function EditarPeriodoForm({
     setGrupos((prev) => prev.map((g, idx) => (idx === gi ? { ...g, nombre } : g)));
   }
 
-  function actualizarItem(gi: number, ii: number, campo: "monto" | "fondo", valor: string | boolean) {
+  function actualizarItem(
+    gi: number,
+    ii: number,
+    campo: "monto" | "fondo" | "excluyeDesarrollador",
+    valor: string | boolean
+  ) {
     setGrupos((prev) =>
       prev.map((g, idx) =>
         idx === gi
@@ -64,7 +74,7 @@ export default function EditarPeriodoForm({
   }
 
   function agregarGrupo() {
-    setGrupos((prev) => [...prev, { nombre: "", items: [{ monto: "", fondo: false }] }]);
+    setGrupos((prev) => [...prev, { nombre: "", items: [{ monto: "", fondo: false, excluyeDesarrollador: false }] }]);
   }
 
   function quitarGrupo(gi: number) {
@@ -73,7 +83,11 @@ export default function EditarPeriodoForm({
 
   function agregarItem(gi: number) {
     setGrupos((prev) =>
-      prev.map((g, idx) => (idx === gi ? { ...g, items: [...g.items, { monto: "", fondo: false }] } : g))
+      prev.map((g, idx) =>
+        idx === gi
+          ? { ...g, items: [...g.items, { monto: "", fondo: false, excluyeDesarrollador: false }] }
+          : g
+      )
     );
   }
 
@@ -193,6 +207,19 @@ export default function EditarPeriodoForm({
                             onChange={(e) => actualizarItem(gi, ii, "fondo", e.target.checked)}
                           />
                           Fondo reserva
+                        </label>
+                        <label
+                          className="flex items-center gap-1 text-xs text-gray-500 w-44"
+                          title="Las unidades sin vender (Costa Tranvial) no pagan este rubro"
+                        >
+                          <input
+                            type="checkbox"
+                            name="catExcluyeDesarrollador"
+                            value={idx}
+                            checked={it.excluyeDesarrollador}
+                            onChange={(e) => actualizarItem(gi, ii, "excluyeDesarrollador", e.target.checked)}
+                          />
+                          No aplica a Costa Tranvial
                         </label>
                         {g.items.length > 1 && (
                           <button
