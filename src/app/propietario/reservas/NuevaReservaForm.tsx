@@ -11,6 +11,17 @@ export default function NuevaReservaForm({ quinchos }: { quinchos: { id: string;
   const [cargando, setCargando] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
+  const hoy = new Date();
+  const formatFecha = (y: number, m: number, d: number) =>
+    `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const fechaMinima = formatFecha(hoy.getFullYear(), hoy.getMonth(), 1);
+  const finMesSiguiente = new Date(hoy.getFullYear(), hoy.getMonth() + 2, 0);
+  const fechaMaxima = formatFecha(
+    finMesSiguiente.getFullYear(),
+    finMesSiguiente.getMonth(),
+    finMesSiguiente.getDate()
+  );
+
   async function onSubmit(formData: FormData) {
     setError("");
     setConfirmado(false);
@@ -48,7 +59,7 @@ export default function NuevaReservaForm({ quinchos }: { quinchos: { id: string;
         </div>
         <div>
           <label className="text-sm font-medium block mb-1">Fecha</label>
-          <input name="fecha" type="date" required />
+          <input name="fecha" type="date" required min={fechaMinima} max={fechaMaxima} />
         </div>
         <div>
           <label className="text-sm font-medium block mb-1">Turno</label>

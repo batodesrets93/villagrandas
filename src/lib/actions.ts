@@ -730,6 +730,20 @@ export async function crearReservaAction(formData: FormData): Promise<ResultadoA
       return { ok: false, error: "Las reservas deben hacerse con un mínimo de 24 horas de anticipación." };
     }
 
+    // Solo se permite reservar dentro del mes corriente o el siguiente
+    // (en hora de Argentina). Evita reservas cargadas con demasiada
+    // anticipacion para meses futuros lejanos.
+    const ahoraArgentina = new Date(ahora.getTime() - OFFSET_ARGENTINA_HORAS * 60 * 60 * 1000);
+    const inicioMesActual = new Date(
+      Date.UTC(ahoraArgentina.getUTCFullYear(), ahoraArgentina.getUTCMonth(), 1)
+    );
+    const inicioMesLuegoDelSiguiente = new Date(
+      Date.UTC(ahoraArgentina.getUTCFullYear(), ahoraArgentina.getUTCMonth() + 2, 1)
+    );
+    if (fecha.getTime() < inicioMesActual.getTime() || fecha.getTime() >= inicioMesLuegoDelSiguiente.getTime()) {
+      return { ok: false, error: "Las reservas solo se pueden hacer para el mes actual o el siguiente." };
+    }
+
     const existente = await prisma.reserva.findFirst({
       where: { quinchoId, fecha, turno, estado: "CONFIRMADA" },
     });
