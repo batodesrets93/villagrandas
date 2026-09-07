@@ -8,24 +8,49 @@ const MEDIOS = ["Transferencia", "Depósito", "Efectivo", "Otro"];
 
 // Formatea lo que el usuario va tipeando como monto en pesos argentinos:
 // punto como separador de miles, coma como separador decimal (máx. 2 dígitos).
-// Acepta que el usuario tipee "," O "." para marcar los decimales: el primer
-// separador que aparezca (sea cual sea) se toma como el decimal, y cualquier
-// otro punto/coma posterior se descarta. El valor resultante (sin el "$ ")
-// sigue siendo compatible con parseMonto en actions.ts.
+// Acepta que el usuario tipee "," O "." para marcar los decimales.
+//
+// Como el valor que se re-procesa en cada tecleo es el string YA formateado
+// (con puntos de miles insertados por esta misma función), hay que distinguir
+// un separador decimal real de un punto de miles que pusimos nosotros antes:
+// - Una "," siempre es una marca decimal explícita del usuario.
+// - Un "." solo cuenta como decimal si le siguen 1 o 2 dígitos. Un punto de
+//   miles bien formado siempre tiene exactamente 3 dígitos después (el último
+//   grupo de miles), así que ese caso se trata como separador de miles y se
+//   descarta (evita que "1.410" + "0" tecleado colapse a "1,41").
+// El valor resultante (sin el "$ ") sigue siendo compatible con parseMonto en
+// actions.ts.
 function formatearMontoInput(valor: string): string {
-  let limpio = valor.replace(/[^\d.,]/g, "");
+  const limpio = valor.replace(/[^\d.,]/g, "");
 
-  const primerSeparador = limpio.search(/[.,]/);
-  if (primerSeparador !== -1) {
-    const entero = limpio.slice(0, primerSeparador).replace(/[.,]/g, "");
-    const decimales = limpio.slice(primerSeparador + 1).replace(/[.,]/g, "");
-    limpio = `${entero},${decimales}`;
+  let ultimoSeparador = -1;
+  for (let i = limpio.length - 1; i >= 0; i--) {
+    if (limpio[i] === "." || limpio[i] === ",") {
+      ultimoSeparador = i;
+      break;
+    }
   }
 
-  const [enteroRaw, decimalRaw] = limpio.split(",");
-  const entero = enteroRaw.replace(/^0+(?=\d)/, "");
-  const decimal = decimalRaw !== undefined ? decimalRaw.slice(0, 2) : undefined;
+  let entero: string;
+  let decimal: string | undefined;
 
+  if (ultimoSeparador === -1) {
+    entero = limpio;
+    decimal = undefined;
+  } else {
+    const digitosDespues = limpio.length - ultimoSeparador - 1;
+    const esComaExplicita = limpio[ultimoSeparador] === ",";
+
+    if (esComaExplicita || digitosDespues <= 2) {
+      entero = limpio.slice(0, ultimoSeparador).replace(/[.,]/g, "");
+      decimal = limpio.slice(ultimoSeparador + 1).replace(/[.,]/g, "").slice(0, 2);
+    } else {
+      entero = limpio.replace(/[.,]/g, "");
+      decimal = undefined;
+    }
+  }
+
+  entero = entero.replace(/^0+(?=\d)/, "");
   const enteroFormateado = entero ? entero.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
 
   if (decimal !== undefined) return `${enteroFormateado},${decimal}`;
