@@ -667,7 +667,7 @@ export async function calcularGasPeriodo(
 
   const cargos = await prisma.cargoUnidadPeriodo.findMany({
     where: { periodoId },
-    select: { id: true, unidadId: true, quincho: true, saldoAnterior: true, totalPagado: true },
+    select: { id: true, unidadId: true, quincho: true, ajuste: true, saldoAnterior: true, totalPagado: true },
   });
 
   // ANTES: por cada uno de los ~79 cargos se hacía un findUniqueOrThrow
@@ -719,7 +719,11 @@ export async function calcularGasPeriodo(
     const cochera = cocheraPorUnidad.get(cargo.unidadId) ?? 0;
     const baulera = bauleraPorUnidad.get(cargo.unidadId) ?? 0;
     const calefaccion = gasPorUnidad.get(cargo.unidadId) ?? 0;
-    const total = gastoComun + cochera + baulera + cargo.quincho + calefaccion;
+    // FIX: esto no sumaba cargo.ajuste (a diferencia de actualizarPeriodoYCalcular
+    // y actualizarAjuste, que si lo suman). Recalcular el gas de un periodo que
+    // ya tenia un ajuste manual cargado (ej: un quincho cargado a mano como
+    // ajuste) lo dejaba fuera del total silenciosamente.
+    const total = gastoComun + cochera + baulera + cargo.quincho + calefaccion + cargo.ajuste;
     const saldoActual = total + cargo.saldoAnterior - cargo.totalPagado;
 
     cargoIds.push(cargo.id);
