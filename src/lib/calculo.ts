@@ -13,26 +13,38 @@ type CategoriaInput = {
 };
 
 /**
- * Gasto comun de UNA unidad para UNA categoria de gasto: su coeficiente
- * sobre el monto de esa categoria, salvo que la categoria excluya a las
- * unidades esDesarrollador (ej: Honorarios de Administracion no se le
- * cobra a Costa Tranvial) y esta unidad lo sea, en cuyo caso es 0 para esa
- * categoria puntual. NO se redistribuye la porcion excluida entre las
- * demas unidades: cada propietario sigue pagando exactamente su propio
- * coeficiente sobre el total de cada categoria que si le corresponde,
- * igual que hace el administrador externo en su planilla (por eso el
- * total recaudado en una categoria excluyente queda por debajo de su
- * monto nominal).
+ * Gasto comun de UNA unidad: su coeficiente sobre el total de las
+ * categorias de gasto, salvo que una categoria excluya a las unidades
+ * esDesarrollador (ej: Honorarios de Administracion no se le cobra a Costa
+ * Tranvial) y esta unidad lo sea, en cuyo caso esa categoria puntual no
+ * suma. NO se redistribuye la porcion excluida entre las demas unidades:
+ * cada propietario sigue pagando exactamente su propio coeficiente sobre
+ * el total de cada categoria que si le corresponde, igual que hace el
+ * administrador externo en su planilla (por eso el total recaudado en una
+ * categoria excluyente queda por debajo de su monto nominal).
+ *
+ * totalCalefaccionFacturada: la calefaccion/agua caliente de cada unidad
+ * ya se cobra aparte, por consumo individual (campo CargoUnidadPeriodo.
+ * calefaccion), a partir de las MISMAS facturas de gas que tambien entran
+ * como categoria de gasto comun ("Gas"). Sin este ajuste, esa factura se
+ * cobraria dos veces: una repartida por coeficiente ac,a y otra por
+ * consumo individual. El administrador externo evita esto restando del
+ * total a repartir por coeficiente el total ya facturado por calefaccion
+ * (ver PDF: TOTAL DEPTO = TOTAL GASTOS - CALEF/AGUA CALIENTE). Se resta
+ * ANTES de multiplicar por el coeficiente, y por igual para todas las
+ * unidades (esto no depende de si son esDesarrollador o no).
  */
 function calcularGastoComunUnidad(
   categorias: { monto: number; excluyeDesarrollador?: boolean }[],
   coeficiente: number,
-  esDesarrollador: boolean
+  esDesarrollador: boolean,
+  totalCalefaccionFacturada: number = 0
 ): number {
-  return categorias.reduce((acc, c) => {
+  const base = categorias.reduce((acc, c) => {
     if (c.excluyeDesarrollador && esDesarrollador) return acc;
     return acc + c.monto * coeficiente;
   }, 0);
+  return base - totalCalefaccionFacturada * coeficiente;
 }
 
 type CargoComplementarioIndividual = {
@@ -679,6 +691,16 @@ export async function calcularGasPeriodo(
   const coeficientePorUnidad = new Map(unidadesCoef.map((u) => [u.id, u.coeficiente]));
   const esDesarrolladorPorUnidad = new Map(unidadesCoef.map((u) => [u.id, u.esDesarrollador]));
 
+  // Total de calefaccion que se le va a facturar a las unidades este
+  // periodo (recien calculado arriba, a partir de la MISMA factura de gas
+  // que tambien esta cargada como categoria de gasto comun "Gas"). Se resta
+  // del monto a repartir por coeficiente para no cobrarla dos veces (ver
+  // el comentario de calcularGastoComunUnidad).
+  const totalCalefaccionFacturada = cargos.reduce(
+    (acc, c) => acc + (gasPorUnidad.get(c.unidadId) ?? 0),
+    0
+  );
+
   const cargoIds: string[] = [];
   const gastoComunes: number[] = [];
   const cocheraMontos: number[] = [];
@@ -691,7 +713,8 @@ export async function calcularGasPeriodo(
     const gastoComun = calcularGastoComunUnidad(
       categorias,
       coeficientePorUnidad.get(cargo.unidadId) ?? 0,
-      esDesarrolladorPorUnidad.get(cargo.unidadId) ?? false
+      esDesarrolladorPorUnidad.get(cargo.unidadId) ?? false,
+      totalCalefaccionFacturada
     );
     const cochera = cocheraPorUnidad.get(cargo.unidadId) ?? 0;
     const baulera = bauleraPorUnidad.get(cargo.unidadId) ?? 0;
@@ -917,6 +940,14 @@ export async function actualizarPeriodoYCalcular(
   const coeficientePorUnidad = new Map(unidadesCoef.map((u) => [u.id, u.coeficiente]));
   const esDesarrolladorPorUnidad = new Map(unidadesCoef.map((u) => [u.id, u.esDesarrollador]));
 
+  // Total de calefaccion YA facturada a las unidades en este periodo (la
+  // carga la pantalla de Gas por separado). Se resta del monto a repartir
+  // por coeficiente para no cobrar la misma factura de gas dos veces (ver
+  // el comentario de calcularGastoComunUnidad). Si todavia no se calculo
+  // el gas de este periodo, cargo.calefaccion es 0 para todos y esto no
+  // resta nada.
+  const totalCalefaccionFacturada = cargos.reduce((acc, c) => acc + c.calefaccion, 0);
+
   const cargoIds: string[] = [];
   const gastoComunes: number[] = [];
   const cocheraMontos: number[] = [];
@@ -928,7 +959,8 @@ export async function actualizarPeriodoYCalcular(
     const gastoComun = calcularGastoComunUnidad(
       params.categorias,
       coeficientePorUnidad.get(cargo.unidadId) ?? 0,
-      esDesarrolladorPorUnidad.get(cargo.unidadId) ?? false
+      esDesarrolladorPorUnidad.get(cargo.unidadId) ?? false,
+      totalCalefaccionFacturada
     );
     const cochera = cocheraPorUnidad.get(cargo.unidadId) ?? 0;
     const baulera = bauleraPorUnidad.get(cargo.unidadId) ?? 0;
