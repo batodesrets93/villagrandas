@@ -188,15 +188,6 @@ model GastoCategoria {
   nombre         String
   monto          Float
   esFondoReserva Boolean        @default(false)
-  // Si esta categoria de gasto (ej: Honorarios de Administracion) no se le
-  // cobra a las unidades marcadas como Unidad.esDesarrollador (hoy, las
-  // unidades sin vender a nombre de Costa Tranvial). El monto de esas
-  // unidades para esta categoria queda en 0: NO se redistribuye entre las
-  // demas (misma logica que usa el administrador externo en su planilla),
-  // asi que el total efectivamente recaudado en esta categoria queda por
-  // debajo de "monto" en la proporcion que le corresponderia al
-  // coeficiente de Costa Tranvial.
-  excluyeDesarrollador Boolean  @default(false)
   orden          Int            @default(0)
 
   comprobantes   Comprobante[]

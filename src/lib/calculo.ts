@@ -7,33 +7,7 @@ type CategoriaInput = {
   nombre: string;
   monto: number;
   esFondoReserva?: boolean;
-  // Ver GastoCategoria.excluyeDesarrollador en el schema: si esta categoria
-  // no se le cobra a las unidades esDesarrollador (Costa Tranvial).
-  excluyeDesarrollador?: boolean;
 };
-
-/**
- * Gasto comun de UNA unidad para UNA categoria de gasto: su coeficiente
- * sobre el monto de esa categoria, salvo que la categoria excluya a las
- * unidades esDesarrollador (ej: Honorarios de Administracion no se le
- * cobra a Costa Tranvial) y esta unidad lo sea, en cuyo caso es 0 para esa
- * categoria puntual. NO se redistribuye la porcion excluida entre las
- * demas unidades: cada propietario sigue pagando exactamente su propio
- * coeficiente sobre el total de cada categoria que si le corresponde,
- * igual que hace el administrador externo en su planilla (por eso el
- * total recaudado en una categoria excluyente queda por debajo de su
- * monto nominal).
- */
-function calcularGastoComunUnidad(
-  categorias: { monto: number; excluyeDesarrollador?: boolean }[],
-  coeficiente: number,
-  esDesarrollador: boolean
-): number {
-  return categorias.reduce((acc, c) => {
-    if (c.excluyeDesarrollador && esDesarrollador) return acc;
-    return acc + c.monto * coeficiente;
-  }, 0);
-}
 
 type CargoComplementarioIndividual = {
   id: string;
@@ -217,7 +191,7 @@ export async function crearPeriodoYCalcular(params: {
   // 2) Calcular todo en memoria (rapido, no toca la base).
   const cargosData = unidades.map((unidad) => {
     const saldoAnterior = saldoAnteriorPorUnidad.get(unidad.id) ?? 0;
-    const gastoComun = calcularGastoComunUnidad(params.categorias, unidad.coeficiente, unidad.esDesarrollador);
+    const gastoComun = totalGastos * unidad.coeficiente;
     const cochera = cocheraPorUnidad.get(unidad.id) ?? 0;
     const baulera = bauleraPorUnidad.get(unidad.id) ?? 0;
     const quinchoDatos = quinchoPorUnidad.get(unidad.id);
@@ -262,7 +236,6 @@ export async function crearPeriodoYCalcular(params: {
               nombre: c.nombre,
               monto: c.monto,
               esFondoReserva: c.esFondoReserva ?? false,
-              excluyeDesarrollador: c.excluyeDesarrollador ?? false,
               orden: i,
             })),
           },
@@ -662,10 +635,9 @@ export async function calcularGasPeriodo(
   // no tiene el problema de timeout de la forma interactiva.
   const unidadesCoef = await prisma.unidad.findMany({
     where: { id: { in: cargos.map((c) => c.unidadId) } },
-    select: { id: true, coeficiente: true, esDesarrollador: true },
+    select: { id: true, coeficiente: true },
   });
   const coeficientePorUnidad = new Map(unidadesCoef.map((u) => [u.id, u.coeficiente]));
-  const esDesarrolladorPorUnidad = new Map(unidadesCoef.map((u) => [u.id, u.esDesarrollador]));
 
   const cargoIds: string[] = [];
   const gastoComunes: number[] = [];
@@ -676,11 +648,7 @@ export async function calcularGasPeriodo(
   const saldosActuales: number[] = [];
 
   for (const cargo of cargos) {
-    const gastoComun = calcularGastoComunUnidad(
-      categorias,
-      coeficientePorUnidad.get(cargo.unidadId) ?? 0,
-      esDesarrolladorPorUnidad.get(cargo.unidadId) ?? false
-    );
+    const gastoComun = totalGastos * (coeficientePorUnidad.get(cargo.unidadId) ?? 0);
     const cochera = cocheraPorUnidad.get(cargo.unidadId) ?? 0;
     const baulera = bauleraPorUnidad.get(cargo.unidadId) ?? 0;
     const calefaccion = gasPorUnidad.get(cargo.unidadId) ?? 0;
@@ -844,12 +812,7 @@ export async function actualizarPeriodoYCalcular(
     if (existente && !idsConservados.has(existente.id)) {
       await prisma.gastoCategoria.update({
         where: { id: existente.id },
-        data: {
-          monto: c.monto,
-          esFondoReserva: c.esFondoReserva ?? false,
-          excluyeDesarrollador: c.excluyeDesarrollador ?? false,
-          orden: i,
-        },
+        data: { monto: c.monto, esFondoReserva: c.esFondoReserva ?? false, orden: i },
       });
       idsConservados.add(existente.id);
     } else {
@@ -859,7 +822,6 @@ export async function actualizarPeriodoYCalcular(
           nombre: c.nombre,
           monto: c.monto,
           esFondoReserva: c.esFondoReserva ?? false,
-          excluyeDesarrollador: c.excluyeDesarrollador ?? false,
           orden: i,
         },
       });
@@ -900,10 +862,9 @@ export async function actualizarPeriodoYCalcular(
   // queries individuales.
   const unidadesCoef = await prisma.unidad.findMany({
     where: { id: { in: cargos.map((c) => c.unidadId) } },
-    select: { id: true, coeficiente: true, esDesarrollador: true },
+    select: { id: true, coeficiente: true },
   });
   const coeficientePorUnidad = new Map(unidadesCoef.map((u) => [u.id, u.coeficiente]));
-  const esDesarrolladorPorUnidad = new Map(unidadesCoef.map((u) => [u.id, u.esDesarrollador]));
 
   const cargoIds: string[] = [];
   const gastoComunes: number[] = [];
@@ -913,11 +874,7 @@ export async function actualizarPeriodoYCalcular(
   const saldosActuales: number[] = [];
 
   for (const cargo of cargos) {
-    const gastoComun = calcularGastoComunUnidad(
-      params.categorias,
-      coeficientePorUnidad.get(cargo.unidadId) ?? 0,
-      esDesarrolladorPorUnidad.get(cargo.unidadId) ?? false
-    );
+    const gastoComun = totalGastos * (coeficientePorUnidad.get(cargo.unidadId) ?? 0);
     const cochera = cocheraPorUnidad.get(cargo.unidadId) ?? 0;
     const baulera = bauleraPorUnidad.get(cargo.unidadId) ?? 0;
     const total = gastoComun + cochera + baulera + cargo.quincho + cargo.calefaccion + cargo.ajuste;

@@ -102,14 +102,12 @@ export async function crearPeriodoAction(formData: FormData): Promise<ResultadoA
     const nombres = formData.getAll("catNombre") as string[];
     const montos = formData.getAll("catMonto") as string[];
     const fondos = formData.getAll("catFondo") as string[];
-    const excluyenDesarrollador = formData.getAll("catExcluyeDesarrollador") as string[];
 
     const categorias = nombres
       .map((nombre, i) => ({
         nombre,
         monto: parseMonto(montos[i]),
         esFondoReserva: fondos.includes(String(i)),
-        excluyeDesarrollador: excluyenDesarrollador.includes(String(i)),
       }))
       .filter((c) => c.nombre.trim() !== "" && c.monto > 0);
 
@@ -147,14 +145,12 @@ export async function actualizarPeriodoAction(formData: FormData): Promise<Resul
     const nombres = formData.getAll("catNombre") as string[];
     const montos = formData.getAll("catMonto") as string[];
     const fondos = formData.getAll("catFondo") as string[];
-    const excluyenDesarrollador = formData.getAll("catExcluyeDesarrollador") as string[];
 
     const categorias = nombres
       .map((nombre, i) => ({
         nombre,
         monto: parseMonto(montos[i]),
         esFondoReserva: fondos.includes(String(i)),
-        excluyeDesarrollador: excluyenDesarrollador.includes(String(i)),
       }))
       .filter((c) => c.nombre.trim() !== "" && c.monto > 0);
 

@@ -32,7 +32,6 @@ export default async function EditarPeriodoPage({ params }: { params: { id: stri
           nombre: g.nombre,
           monto: g.monto.toString(),
           fondo: g.esFondoReserva,
-          excluyeDesarrollador: g.excluyeDesarrollador,
         }))}
       />
     </div>

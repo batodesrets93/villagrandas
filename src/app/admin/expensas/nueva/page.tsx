@@ -19,19 +19,13 @@ const CATEGORIAS_SUGERIDAS = [
   "Varios",
 ];
 
-type Item = { monto: string; fondo: boolean; excluyeDesarrollador: boolean };
+type Item = { monto: string; fondo: boolean };
 type Grupo = { nombre: string; items: Item[] };
 
 export default function NuevoPeriodoPage() {
   const router = useRouter();
   const [grupos, setGrupos] = useState<Grupo[]>(
-    CATEGORIAS_SUGERIDAS.map((n) => ({
-      nombre: n,
-      // "Honorarios administración" viene destildado por defecto para que
-      // Costa Tranvial (unidades sin vender) no pague ese rubro, igual que
-      // hace el administrador externo en su planilla.
-      items: [{ monto: "", fondo: false, excluyeDesarrollador: n === "Honorarios administración" }],
-    }))
+    CATEGORIAS_SUGERIDAS.map((n) => ({ nombre: n, items: [{ monto: "", fondo: false }] }))
   );
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -40,12 +34,7 @@ export default function NuevoPeriodoPage() {
     setGrupos((prev) => prev.map((g, idx) => (idx === gi ? { ...g, nombre } : g)));
   }
 
-  function actualizarItem(
-    gi: number,
-    ii: number,
-    campo: "monto" | "fondo" | "excluyeDesarrollador",
-    valor: string | boolean
-  ) {
+  function actualizarItem(gi: number, ii: number, campo: "monto" | "fondo", valor: string | boolean) {
     setGrupos((prev) =>
       prev.map((g, idx) =>
         idx === gi
@@ -56,7 +45,7 @@ export default function NuevoPeriodoPage() {
   }
 
   function agregarGrupo() {
-    setGrupos((prev) => [...prev, { nombre: "", items: [{ monto: "", fondo: false, excluyeDesarrollador: false }] }]);
+    setGrupos((prev) => [...prev, { nombre: "", items: [{ monto: "", fondo: false }] }]);
   }
 
   function quitarGrupo(gi: number) {
@@ -65,11 +54,7 @@ export default function NuevoPeriodoPage() {
 
   function agregarItem(gi: number) {
     setGrupos((prev) =>
-      prev.map((g, idx) =>
-        idx === gi
-          ? { ...g, items: [...g.items, { monto: "", fondo: false, excluyeDesarrollador: false }] }
-          : g
-      )
+      prev.map((g, idx) => (idx === gi ? { ...g, items: [...g.items, { monto: "", fondo: false }] } : g))
     );
   }
 
@@ -186,19 +171,6 @@ export default function NuevoPeriodoPage() {
                               onChange={(e) => actualizarItem(gi, ii, "fondo", e.target.checked)}
                             />
                             Fondo reserva
-                          </label>
-                          <label
-                            className="flex items-center gap-1 text-xs text-gray-500 w-44"
-                            title="Las unidades sin vender (Costa Tranvial) no pagan este rubro"
-                          >
-                            <input
-                              type="checkbox"
-                              name="catExcluyeDesarrollador"
-                              value={idx}
-                              checked={it.excluyeDesarrollador}
-                              onChange={(e) => actualizarItem(gi, ii, "excluyeDesarrollador", e.target.checked)}
-                            />
-                            No aplica a Costa Tranvial
                           </label>
                           {g.items.length > 1 && (
                             <button
