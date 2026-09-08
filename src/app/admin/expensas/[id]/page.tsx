@@ -8,7 +8,9 @@ import ImportarPagosForm from "./ImportarPagosForm";
 import EliminarPagoButton from "@/components/EliminarPagoButton";
 
 function money(n: number) {
-  return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // \u00A0 (espacio de no separación) evita que el "$" quede en una línea
+  // y el importe en la siguiente cuando la columna de la tabla es angosta.
+  return "$\u00A0" + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function m2Texto(n: number) {
@@ -153,8 +155,8 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                     c.unidad.titular
                   )}
                 </td>
-                <td>{esConsolidada ? <span className="text-gray-300">—</span> : money(c.gastoComun)}</td>
-                <td>{money(c.cochera + c.baulera)}</td>
+                <td className="whitespace-nowrap">{esConsolidada ? <span className="text-gray-300">—</span> : money(c.gastoComun)}</td>
+                <td className="whitespace-nowrap">{money(c.cochera + c.baulera)}</td>
                 <td>
                   {cocheraM2 > 0 && m2Texto(cocheraM2)}
                   {cocheraM2 > 0 && bauleraM2 > 0 && " + "}
@@ -170,9 +172,9 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                     "-"
                   )}
                 </td>
-                <td>{esConsolidada ? <span className="text-gray-300">—</span> : money(c.quincho)}</td>
+                <td className="whitespace-nowrap">{esConsolidada ? <span className="text-gray-300">—</span> : money(c.quincho)}</td>
                 <td>
-                  {money(c.calefaccion)}
+                  <span className="whitespace-nowrap">{money(c.calefaccion)}</span>
                   <details className="mt-1">
                     <summary className="cursor-pointer text-xs text-gray-400">Corregir</summary>
                     <form action={actualizarCalefaccionAction} className="flex gap-1 mt-1">
@@ -188,7 +190,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                   </details>
                 </td>
                 <td className={c.ajuste < 0 ? "text-red-600" : c.ajuste > 0 ? "text-brand-700" : undefined}>
-                  {money(c.ajuste)}
+                  <span className="whitespace-nowrap">{money(c.ajuste)}</span>
                   {c.ajusteConcepto && (
                     <div className="text-xs text-gray-400 max-w-[8rem] truncate" title={c.ajusteConcepto}>
                       {c.ajusteConcepto}
@@ -214,10 +216,10 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                     </form>
                   </details>
                 </td>
-                <td className="font-medium">{money(c.total)}</td>
-                <td>{money(c.saldoAnterior)}</td>
-                <td>{money(c.totalPagado)}</td>
-                <td className="font-bold text-brand-700">{money(c.saldoActual)}</td>
+                <td className="font-medium whitespace-nowrap">{money(c.total)}</td>
+                <td className="whitespace-nowrap">{money(c.saldoAnterior)}</td>
+                <td className="whitespace-nowrap">{money(c.totalPagado)}</td>
+                <td className="font-bold text-brand-700 whitespace-nowrap">{money(c.saldoActual)}</td>
                 <td className="space-y-1">
                   <a href={`/api/pdf/${c.id}`} className="text-brand-600 underline text-xs block">
                     Descargar PDF
