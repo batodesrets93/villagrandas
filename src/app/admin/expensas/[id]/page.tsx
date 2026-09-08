@@ -126,13 +126,34 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
               const m2Complementarios = m2ComplementariosPorUnidad.get(c.unidadId);
               const cocheraM2 = m2Complementarios?.cocheraM2 ?? 0;
               const bauleraM2 = m2Complementarios?.bauleraM2 ?? 0;
+              const esConsolidada = c.unidad.esConsolidadaCocheraBaulera;
               return (
-              <tr key={c.id}>
+              <tr key={c.id} className={esConsolidada ? "bg-amber-50" : undefined}>
                 <td className="sticky-col">
-                  {c.unidad.torre === "GRANDE" ? "TG" : "TC"} {c.unidad.piso}º{c.unidad.depto}
+                  {esConsolidada ? (
+                    <span
+                      className="inline-block whitespace-nowrap rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800"
+                      title="Cuenta consolidada: cocheras y bauleras que todavía no tienen propietario asignado"
+                    >
+                      Consolidado
+                    </span>
+                  ) : (
+                    <>
+                      {c.unidad.torre === "GRANDE" ? "TG" : "TC"} {c.unidad.piso}º{c.unidad.depto}
+                    </>
+                  )}
                 </td>
-                <td>{c.unidad.titular}</td>
-                <td>{money(c.gastoComun)}</td>
+                <td>
+                  {esConsolidada ? (
+                    <>
+                      <div>Costa Tranvial</div>
+                      <div className="text-xs text-gray-400">Cocheras y bauleras sin asignar</div>
+                    </>
+                  ) : (
+                    c.unidad.titular
+                  )}
+                </td>
+                <td>{esConsolidada ? <span className="text-gray-300">—</span> : money(c.gastoComun)}</td>
                 <td>{money(c.cochera + c.baulera)}</td>
                 <td>
                   {cocheraM2 > 0 && m2Texto(cocheraM2)}
@@ -141,11 +162,15 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                   {cocheraM2 === 0 && bauleraM2 === 0 && "-"}
                 </td>
                 <td>
-                  {totalM2Edificio > 0
-                    ? porcentajeTexto((c.unidad.m2 + cocheraM2 + bauleraM2) / totalM2Edificio)
-                    : "-"}
+                  {esConsolidada ? (
+                    <span className="text-gray-300">—</span>
+                  ) : totalM2Edificio > 0 ? (
+                    porcentajeTexto((c.unidad.m2 + cocheraM2 + bauleraM2) / totalM2Edificio)
+                  ) : (
+                    "-"
+                  )}
                 </td>
-                <td>{money(c.quincho)}</td>
+                <td>{esConsolidada ? <span className="text-gray-300">—</span> : money(c.quincho)}</td>
                 <td>
                   {money(c.calefaccion)}
                   <details className="mt-1">
