@@ -34,6 +34,7 @@ export default async function CocherasBaulerasPage() {
     caracteristica: c.caracteristica,
     unidadId: c.unidadId,
     unidadLabel: c.unidad ? unidadLabel(c.unidad) : null,
+    excluyeDesarrollador: c.excluyeDesarrollador,
   }));
 
   const baulerasRows = bauleras.map((b) => ({
@@ -43,6 +44,7 @@ export default async function CocherasBaulerasPage() {
     m2: b.m2,
     unidadId: b.unidadId,
     unidadLabel: b.unidad ? unidadLabel(b.unidad) : null,
+    excluyeDesarrollador: b.excluyeDesarrollador,
   }));
 
   return (
@@ -52,8 +54,12 @@ export default async function CocherasBaulerasPage() {
         Cada cochera y cada baulera se liquida individualmente por su propio m² (igual que en el excel), y esa parte
         del gasto se le suma al total de la unidad que la tenga asignada. Las que todavía no tienen propietario
         asignado se le cobran a la cuenta consolidada de Costa Tranvial, para que esa parte del gasto común nunca
-        quede sin cobrarse a nadie. Reasignar un espacio acá solo afecta los períodos que se generen de ahora en
-        adelante — no recalcula liquidaciones ya cerradas de meses anteriores.
+        quede sin cobrarse a nadie. La columna &quot;Sin admin.&quot; excluye a ese espacio puntual de Honorarios de
+        Administración, igual que a Costa Tranvial (para cocheras/bauleras que siguen sin cobrarle administración
+        aunque estén asignadas a un propietario real). Reasignar un espacio o tildar/destildar &quot;Sin admin.&quot;
+        acá solo afecta los períodos que se generen de ahora en adelante — para que un período ya generado (por
+        ejemplo, el del mes en curso) tome el cambio, hay que volver a guardar sus categorías desde
+        &quot;Editar período&quot;.
       </p>
       <CocherasBaulerasTables cocheras={cocherasRows} bauleras={baulerasRows} unidades={unidadesOpciones} />
     </div>

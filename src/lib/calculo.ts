@@ -77,7 +77,7 @@ type CargoComplementarioIndividual = {
 
 /**
  * Trae cocheras y bauleras (cada una es su propia unidad complementaria,
- * con su propio m2) y calcula, para el total de gastos de un período:
+ * con su propio m2) y calcula, para las categorias de gasto de un período:
  *
  * - el m2 total REAL del edificio: deptos + TODAS las cocheras + TODAS las
  *   bauleras, tengan o no propietario asignado (antes, el m2 de las que no
@@ -85,17 +85,33 @@ type CargoComplementarioIndividual = {
  *   cobraban).
  * - la liquidación individual de cada cochera y cada baulera (monto = su
  *   m2 * gasto por m2 del edificio), igual que en las pestañas COCHERAS y
- *   BAULERAS del excel.
+ *   BAULERAS del excel. Se calculan DOS tarifas por m2: una con todas las
+ *   categorias prorrateables, y otra excluyendo las marcadas
+ *   excluyeDesarrollador (hoy, Honorarios de Administracion) — igual que
+ *   calcularGastoComunUnidad hace para los deptos de unidades
+ *   esDesarrollador. Cada cochera/baulera usa una u otra segun su propio
+ *   flag Cochera.excluyeDesarrollador / Baulera.excluyeDesarrollador (ver
+ *   ese campo en el schema): cocheras/bauleras que en la planilla del
+ *   administrador externo siguen sin cobrar administracion aunque esten
+ *   asignadas a un propietario real (detectado en Agosto/2026 comparando
+ *   contra esa planilla: Troyano Ana, Daniel Rigueiro y Manuela Rigueiro).
  * - a qué unidad se le cobra cada una: a su propietario si tiene uno
  *   asignado, o a la unidad marcada como "esConsolidadaCocheraBaulera"
  *   (hoy, la cuenta consolidada de Costa Tranvial) si todavía no se
  *   asignó.
  */
-async function calcularComplementarios(totalGastos: number) {
+async function calcularComplementarios(categorias: CategoriaInput[]) {
+  const totalGastosCompleto = totalGastosProrrateables(categorias);
+  const totalGastosSinDesarrollador = categorias.reduce((acc, c) => {
+    if (esCategoriaGas(c.nombre)) return acc;
+    if (c.excluyeDesarrollador) return acc;
+    return acc + c.monto;
+  }, 0);
+
   const [unidades, cocheras, bauleras] = await Promise.all([
     prisma.unidad.findMany({ select: { id: true, m2: true, esConsolidadaCocheraBaulera: true } }),
-    prisma.cochera.findMany({ select: { id: true, m2: true, unidadId: true } }),
-    prisma.baulera.findMany({ select: { id: true, m2: true, unidadId: true } }),
+    prisma.cochera.findMany({ select: { id: true, m2: true, unidadId: true, excluyeDesarrollador: true } }),
+    prisma.baulera.findMany({ select: { id: true, m2: true, unidadId: true, excluyeDesarrollador: true } }),
   ]);
 
   const consolidada = unidades.find((u) => u.esConsolidadaCocheraBaulera);
@@ -110,16 +126,17 @@ async function calcularComplementarios(totalGastos: number) {
   const totalM2Cocheras = cocheras.reduce((acc, c) => acc + c.m2, 0);
   const totalM2Bauleras = bauleras.reduce((acc, b) => acc + b.m2, 0);
   const totalM2Edificio = totalM2Unidades + totalM2Cocheras + totalM2Bauleras;
-  const montoPorM2 = totalM2Edificio > 0 ? totalGastos / totalM2Edificio : 0;
+  const montoPorM2 = totalM2Edificio > 0 ? totalGastosCompleto / totalM2Edificio : 0;
+  const montoPorM2SinDesarrollador = totalM2Edificio > 0 ? totalGastosSinDesarrollador / totalM2Edificio : 0;
 
   const cocherasIndividuales: CargoComplementarioIndividual[] = cocheras.map((c) => ({
     id: c.id,
-    monto: montoPorM2 * c.m2,
+    monto: (c.excluyeDesarrollador ? montoPorM2SinDesarrollador : montoPorM2) * c.m2,
     unidadCobradaId: c.unidadId ?? consolidada.id,
   }));
   const baulerasIndividuales: CargoComplementarioIndividual[] = bauleras.map((b) => ({
     id: b.id,
-    monto: montoPorM2 * b.m2,
+    monto: (b.excluyeDesarrollador ? montoPorM2SinDesarrollador : montoPorM2) * b.m2,
     unidadCobradaId: b.unidadId ?? consolidada.id,
   }));
 
@@ -210,7 +227,7 @@ export async function crearPeriodoYCalcular(params: {
   });
 
   const { cocheraPorUnidad, bauleraPorUnidad, cocherasIndividuales, baulerasIndividuales } =
-    await calcularComplementarios(totalGastosProrrateables(params.categorias));
+    await calcularComplementarios(params.categorias);
 
   // Se trae tambien montoAplicado: el precio del quincho puede cambiar con
   // el tiempo, y cada reserva "congela" el precio vigente al momento de
@@ -685,7 +702,7 @@ export async function calcularGasPeriodo(
   await prisma.periodoExpensa.update({ where: { id: periodoId }, data: { totalGastos } });
 
   const { cocheraPorUnidad, bauleraPorUnidad, cocherasIndividuales, baulerasIndividuales } =
-    await calcularComplementarios(totalGastosProrrateables(categorias));
+    await calcularComplementarios(categorias);
 
   const cargos = await prisma.cargoUnidadPeriodo.findMany({
     where: { periodoId },
@@ -923,7 +940,7 @@ export async function actualizarPeriodoYCalcular(
   }
 
   const { cocheraPorUnidad, bauleraPorUnidad, cocherasIndividuales, baulerasIndividuales } =
-    await calcularComplementarios(totalGastosProrrateables(params.categorias));
+    await calcularComplementarios(params.categorias);
 
   const cargos = await prisma.cargoUnidadPeriodo.findMany({
     where: { periodoId },

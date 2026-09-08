@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import AsignarSelect from "./AsignarSelect";
+import ExcluyeAdministracionToggle from "./ExcluyeAdministracionToggle";
 
 export type EspacioRow = {
   id: string;
@@ -11,6 +12,7 @@ export type EspacioRow = {
   caracteristica?: string | null;
   unidadId: string | null;
   unidadLabel: string | null;
+  excluyeDesarrollador: boolean;
 };
 
 type UnidadOpcion = { id: string; label: string };
@@ -73,6 +75,7 @@ function Tabla({
             {tipo === "cochera" && <th>Tipo</th>}
             <th>m²</th>
             <th>Asignada a</th>
+            <th title="No cobrarle Honorarios de Administración a este espacio puntual">Sin admin.</th>
           </tr>
         </thead>
         <tbody>
@@ -85,11 +88,14 @@ function Tabla({
               <td>
                 <AsignarSelect tipo={tipo} espacioId={e.id} unidadIdActual={e.unidadId} unidades={unidades} />
               </td>
+              <td>
+                <ExcluyeAdministracionToggle tipo={tipo} espacioId={e.id} checked={e.excluyeDesarrollador} />
+              </td>
             </tr>
           ))}
           {filtradas.length === 0 && (
             <tr>
-              <td colSpan={tipo === "cochera" ? 5 : 4} className="text-center text-gray-500 py-4">
+              <td colSpan={tipo === "cochera" ? 6 : 5} className="text-center text-gray-500 py-4">
                 No se encontraron resultados para &quot;{busqueda}&quot;.
               </td>
             </tr>

@@ -701,6 +701,34 @@ export async function asignarBauleraAction(formData: FormData): Promise<Resultad
   }
 }
 
+/**
+ * Marca/desmarca una cochera puntual como excluida de las categorias
+ * marcadas excluyeDesarrollador (hoy, Honorarios de Administracion) — ver
+ * Cochera.excluyeDesarrollador en el schema. Solo afecta a los periodos que
+ * se generen o recalculen de ahora en adelante (igual que reasignar un
+ * espacio), no a liquidaciones ya calculadas.
+ */
+export async function marcarExcluyeAdministracionCocheraAction(formData: FormData) {
+  await requireAdmin();
+  const cocheraId = String(formData.get("cocheraId"));
+  const excluyeDesarrollador = formData.get("excluyeDesarrollador") === "on";
+
+  await prisma.cochera.update({ where: { id: cocheraId }, data: { excluyeDesarrollador } });
+
+  revalidatePath("/admin/cocheras-bauleras");
+}
+
+/** Igual que marcarExcluyeAdministracionCocheraAction, pero para bauleras. */
+export async function marcarExcluyeAdministracionBauleraAction(formData: FormData) {
+  await requireAdmin();
+  const bauleraId = String(formData.get("bauleraId"));
+  const excluyeDesarrollador = formData.get("excluyeDesarrollador") === "on";
+
+  await prisma.baulera.update({ where: { id: bauleraId }, data: { excluyeDesarrollador } });
+
+  revalidatePath("/admin/cocheras-bauleras");
+}
+
 export async function crearReservaAction(formData: FormData): Promise<ResultadoAccion> {
   try {
     const session = await requirePropietario();

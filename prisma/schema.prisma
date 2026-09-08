@@ -119,6 +119,16 @@ model Cochera {
   caracteristica String?
   unidadId       String?
   unidad         Unidad? @relation(fields: [unidadId], references: [id])
+  // Ver GastoCategoria.excluyeDesarrollador: esta cochera puntual no paga
+  // las categorias marcadas asi (hoy, Honorarios de Administracion), igual
+  // que las unidades esDesarrollador. Se usa para cocheras que siguen
+  // figurando a nombre de Costa Tranvial en la planilla del administrador
+  // externo aunque esten asignadas a un propietario real (uso/alquiler sin
+  // escriturar todavia) — detectado en Agosto/2026 comparando contra esa
+  // planilla: Troyano Ana (TG 12A), Daniel Rigueiro (TG 21A, una de sus dos
+  // cocheras) y Manuela Rigueiro (TC 06B) tienen su cochera asi en la
+  // planilla, y ahi no se les cobra administracion sobre ese m2.
+  excluyeDesarrollador Boolean @default(false)
 
   cargos CargoCocheraPeriodo[]
 
@@ -135,6 +145,9 @@ model Baulera {
   m2       Float
   unidadId String?
   unidad   Unidad? @relation(fields: [unidadId], references: [id])
+  // Ver Cochera.excluyeDesarrollador: mismo caso para bauleras (hoy,
+  // Manuela Rigueiro en TC 06B).
+  excluyeDesarrollador Boolean @default(false)
 
   cargos CargoBauleraPeriodo[]
 
