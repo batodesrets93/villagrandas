@@ -11,6 +11,7 @@ datasource db {
 enum Rol {
   ADMIN
   PROPIETARIO
+  LIMPIEZA
 }
 
 enum Torre {
@@ -52,6 +53,11 @@ enum CategoriaReclamo {
   OTRO
 }
 
+enum TipoReclamo {
+  RECLAMO
+  SUGERENCIA
+}
+
 model Usuario {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -64,6 +70,12 @@ model Usuario {
   reclamos     Reclamo[]
   reservas     Reserva[]
   createdAt    DateTime  @default(now())
+
+  // Marca timestamp de la ultima vez que este usuario abrio el calendario
+  // de reservas de quincho. Se usa para el badge de "reservas nuevas" del
+  // rol LIMPIEZA (ver /limpieza): cuenta las reservas creadas despues de
+  // este momento.
+  ultimaVistaReservas DateTime?
 }
 
 model Unidad {
@@ -369,6 +381,7 @@ model Reclamo {
   usuario      Usuario       @relation(fields: [usuarioId], references: [id])
   titulo       String
   descripcion  String
+  tipo         TipoReclamo   @default(RECLAMO)
   categoria    CategoriaReclamo @default(OTRO)
   estado       EstadoReclamo @default(ABIERTO)
   respuesta    String?

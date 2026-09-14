@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { CategoriaReclamo } from "@prisma/client";
+import { CategoriaReclamo, TipoReclamo } from "@prisma/client";
 import {
   crearPeriodoYCalcular,
   actualizarPeriodoYCalcular,
@@ -87,6 +87,7 @@ function emailsAvisoAdmin(): string[] {
     .map((e) => e.trim())
     .filter(Boolean);
 }
+
 
 type ResultadoAccion<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -1063,12 +1064,16 @@ export async function crearReclamoAction(formData: FormData): Promise<ResultadoA
     const titulo = String(formData.get("titulo"));
     const descripcion = String(formData.get("descripcion"));
     const categoriaRaw = String(formData.get("categoria") || "OTRO");
+    const tipoRaw = String(formData.get("tipo") || "RECLAMO");
     if (!titulo.trim() || !descripcion.trim()) {
       return { ok: false, error: "Completá título y descripción." };
     }
     const categoria = Object.values(CategoriaReclamo).includes(categoriaRaw as CategoriaReclamo)
       ? (categoriaRaw as CategoriaReclamo)
       : CategoriaReclamo.OTRO;
+    const tipo = Object.values(TipoReclamo).includes(tipoRaw as TipoReclamo)
+      ? (tipoRaw as TipoReclamo)
+      : TipoReclamo.RECLAMO;
 
     const archivos = formData
       .getAll("archivos")
@@ -1091,6 +1096,7 @@ export async function crearReclamoAction(formData: FormData): Promise<ResultadoA
         titulo,
         descripcion,
         categoria,
+        tipo,
         unidadId: session.user.unidadId!,
         usuarioId: session.user.id,
       },
@@ -1184,4 +1190,37 @@ export async function cambiarPasswordAction(formData: FormData): Promise<Resulta
     console.error("[cambiarPasswordAction] Error inesperado:", e);
     return { ok: false, error: "No se pudo cambiar la contraseña por un error inesperado. Probá de nuevo en un minuto." };
   }
+}
+
+// ---- Notificaciones de reservas para el rol LIMPIEZA ----
+// El calendario de quinchos es lo unico que ve este rol. Como no hay
+// infraestructura de push notifications (service worker, VAPID, etc.), la
+// "notificacion en la app" es un badge con la cantidad de reservas nuevas
+// desde la ultima vez que abrio /limpieza (ver Usuario.ultimaVistaReservas).
+
+async function requireLimpieza() {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.rol !== "LIMPIEZA") throw new Error("No autorizado");
+  return session;
+}
+
+export async function contarReservasNuevasLimpiezaAction(): Promise<number> {
+  const session = await requireLimpieza();
+
+  const usuario = await prisma.usuario.findUniqueOrThrow({ where: { id: session.user.id } });
+
+  return prisma.reserva.count({
+    where: {
+      estado: "CONFIRMADA",
+      createdAt: usuario.ultimaVistaReservas ? { gt: usuario.ultimaVistaReservas } : undefined,
+    },
+  });
+}
+
+export async function marcarVistaReservasLimpiezaAction() {
+  const session = await requireLimpieza();
+  await prisma.usuario.update({
+    where: { id: session.user.id },
+    data: { ultimaVistaReservas: new Date() },
+  });
 }

@@ -7,6 +7,16 @@ const badge: Record<string, string> = {
   CERRADO: "bg-green-100 text-green-700",
 };
 
+const tipoLabel: Record<string, string> = {
+  RECLAMO: "Reclamo",
+  SUGERENCIA: "Sugerencia",
+};
+
+const tipoBadge: Record<string, string> = {
+  RECLAMO: "bg-orange-100 text-orange-700",
+  SUGERENCIA: "bg-blue-100 text-blue-700",
+};
+
 const categoriaLabel: Record<string, string> = {
   RUIDO: "Ruido",
   MANTENIMIENTO: "Mantenimiento",
@@ -34,6 +44,9 @@ export default async function ReclamosAdminPage() {
           <div key={r.id} className="card">
             <div className="flex items-center justify-between mb-2">
               <div>
+                <span className={`text-xs px-2 py-0.5 rounded-full mr-1 ${tipoBadge[r.tipo] ?? "bg-gray-100 text-gray-600"}`}>
+                  {tipoLabel[r.tipo] ?? r.tipo}
+                </span>
                 <span className="font-semibold">{r.titulo}</span>{" "}
                 <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
                   {categoriaLabel[r.categoria] ?? r.categoria}

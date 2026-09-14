@@ -12,11 +12,14 @@ export default withAuth(
     if (pathname.startsWith("/propietario") && rol !== "PROPIETARIO") {
       return NextResponse.redirect(new URL("/login", req.url));
     }
+    if (pathname.startsWith("/limpieza") && rol !== "LIMPIEZA") {
+      return NextResponse.redirect(new URL("/login", req.url));
+    }
     return NextResponse.next();
   },
   { pages: { signIn: "/login" } }
 );
 
 export const config = {
-  matcher: ["/admin/:path*", "/propietario/:path*"],
+  matcher: ["/admin/:path*", "/propietario/:path*", "/limpieza/:path*"],
 };

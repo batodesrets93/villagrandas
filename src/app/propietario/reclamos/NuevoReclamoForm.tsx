@@ -39,6 +39,14 @@ export default function NuevoReclamoForm() {
   return (
     <form ref={formRef} action={onSubmit} className="card space-y-3">
       <h2 className="font-semibold">Nuevo reclamo</h2>
+      <div className="flex gap-4 text-sm">
+        <label className="flex items-center gap-1">
+          <input type="radio" name="tipo" value="RECLAMO" defaultChecked /> Reclamo
+        </label>
+        <label className="flex items-center gap-1">
+          <input type="radio" name="tipo" value="SUGERENCIA" /> Sugerencia
+        </label>
+      </div>
       <input name="titulo" placeholder="Título (ej: Ruido molesto, Ascensor, etc.)" required />
       <select name="categoria" defaultValue="OTRO" required>
         {CATEGORIAS.map((c) => (
@@ -62,7 +70,7 @@ export default function NuevoReclamoForm() {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={cargando} className="btn btn-primary">
-        {cargando ? "Enviando..." : "Enviar reclamo"}
+        {cargando ? "Enviando..." : "Enviar"}
       </button>
     </form>
   );
