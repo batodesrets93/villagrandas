@@ -370,6 +370,14 @@ model Reserva {
   cargo         CargoUnidadPeriodo? @relation(fields: [cargoId], references: [id])
   createdAt     DateTime            @default(now())
 
+// Antes había un @@unique([quinchoId, fecha, turno]) a nivel de base de
+  // datos. Se sacó porque incluía también las reservas CANCELADA: al
+  // cancelar una reserva la fila queda en la tabla (para no perder el
+  // historial), y esa restricción impedía volver a reservar el mismo
+  // quincho/fecha/turno para otro propietario. La disponibilidad ahora se
+  // valida exclusivamente en el código (crearReservaAction /
+  // crearReservaAdminAction), que ya chequea estado: "CONFIRMADA" antes
+  // de crear la reserva.
   @@index([quinchoId, fecha, turno])
 }
 
