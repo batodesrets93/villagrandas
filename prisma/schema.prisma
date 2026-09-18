@@ -370,7 +370,7 @@ model Reserva {
   cargo         CargoUnidadPeriodo? @relation(fields: [cargoId], references: [id])
   createdAt     DateTime            @default(now())
 
-  @@unique([quinchoId, fecha, turno])
+  @@index([quinchoId, fecha, turno])
 }
 
 model Reclamo {
@@ -400,3 +400,6 @@ model AdjuntoReclamo {
   datos         Bytes
   createdAt     DateTime @default(now())
 }
+
+
+
