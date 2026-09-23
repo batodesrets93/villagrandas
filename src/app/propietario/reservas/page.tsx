@@ -41,6 +41,12 @@ export default async function ReservasPropietarioPage({
     orderBy: { fecha: "asc" },
   });
 
+  // Corte: inicio del día de hoy en Argentina (las fechas de reserva se guardan a medianoche UTC)
+  const hoyAR = new Date().toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" });
+  const corteHoy = new Date(`${hoyAR}T00:00:00Z`);
+  const proximasReservas = misReservas.filter((r) => r.fecha >= corteHoy);
+  const reservasAnteriores = misReservas.filter((r) => r.fecha < corteHoy).reverse();
+
   const reservasCalendario: ReservaCalendario[] = ocupadas.map((r) => ({
     id: r.id,
     fecha: r.fecha,
@@ -89,9 +95,9 @@ export default async function ReservasPropietarioPage({
             </tr>
           </thead>
           <tbody>
-            {misReservas.map((r) => (
+            {proximasReservas.map((r) => (
               <tr key={r.id}>
-                <td>{r.fecha.toLocaleDateString("es-AR")}</td>
+                <td>{r.fecha.toLocaleDateString("es-AR", { timeZone: "UTC" })}</td>
                 <td>{r.turno === "MEDIODIA" ? "Mediodía" : "Noche"}</td>
                 <td>{r.quincho.nombre}</td>
                 <td>
@@ -104,16 +110,40 @@ export default async function ReservasPropietarioPage({
                 </td>
               </tr>
             ))}
-            {misReservas.length === 0 && (
+            {proximasReservas.length === 0 && (
               <tr>
                 <td colSpan={4} className="text-center text-gray-400 py-4">
-                  No tenés reservas activas.
+                  No tenés próximas reservas.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {reservasAnteriores.length > 0 && (
+        <div className="card">
+          <h2 className="font-semibold mb-3 text-gray-600">Reservas anteriores</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Turno</th>
+                <th>Quincho</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reservasAnteriores.map((r) => (
+                <tr key={r.id} className="text-gray-500">
+                  <td>{r.fecha.toLocaleDateString("es-AR", { timeZone: "UTC" })}</td>
+                  <td>{r.turno === "MEDIODIA" ? "Mediodía" : "Noche"}</td>
+                  <td>{r.quincho.nombre}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div>
         <h2 className="font-semibold mb-3 text-brand-700">Disponibilidad</h2>
