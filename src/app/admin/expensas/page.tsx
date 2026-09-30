@@ -10,7 +10,7 @@ function money(n: number) {
 export default async function ExpensasPage() {
   const periodos = await prisma.periodoExpensa.findMany({
     orderBy: { fechaInicio: "desc" },
-    include: { cargos: true },
+    include: { cargos: { include: { unidad: { select: { esDesarrollador: true } } } } },
   });
 
   return (
@@ -35,7 +35,10 @@ export default async function ExpensasPage() {
           </thead>
           <tbody>
             {periodos.map((p) => {
-              const deuda = p.cargos.reduce((acc, c) => acc + c.saldoActual, 0);
+              // Sin las unidades del desarrollador (Costa Tranvial): su saldo no es deuda del consorcio.
+              const deuda = p.cargos
+                .filter((c) => !c.unidad.esDesarrollador)
+                .reduce((acc, c) => acc + c.saldoActual, 0);
               return (
                 <tr key={p.id}>
                   <td className="font-medium">{p.etiqueta}</td>

@@ -12,14 +12,14 @@ export type PuntoEvolucion = {
 /**
  * Deuda total (suma de saldoActual de todos los cargos) de los últimos N
  * períodos liquidados, en orden cronológico ascendente para graficar.
- * Incluye unidades del desarrollador: es un total de la administración,
- * no un ranking de propietarios.
+ * Excluye las unidades del desarrollador (esDesarrollador = true, hoy Costa
+ * Tranvial): su saldo no es deuda de propietarios del consorcio.
  */
 export async function getEvolucionMorosidad(cantidad = PERIODOS_EVOLUCION): Promise<PuntoEvolucion[]> {
   const periodos = await prisma.periodoExpensa.findMany({
     orderBy: { fechaInicio: "desc" },
     take: cantidad,
-    include: { cargos: { select: { saldoActual: true } } },
+    include: { cargos: { where: { unidad: { esDesarrollador: false } }, select: { saldoActual: true } } },
   });
 
   return periodos

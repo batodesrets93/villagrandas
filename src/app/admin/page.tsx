@@ -17,8 +17,15 @@ export default async function AdminDashboard() {
 
   const ultimoPeriodo = periodosRecientes[0] ?? null;
 
+  // La deuda de las unidades del desarrollador (esDesarrollador = true, hoy
+  // Costa Tranvial, incluida su cuenta consolidada de cocheras/bauleras) no
+  // cuenta como morosidad del consorcio: se excluye del total, del grafico
+  // de evolucion y del top de deudores.
+  const cargosPropietarios = (cargos: (typeof periodosRecientes)[number]["cargos"]) =>
+    cargos.filter((c) => !c.unidad.esDesarrollador);
+
   const deudaTotal = ultimoPeriodo
-    ? ultimoPeriodo.cargos.reduce((acc, c) => acc + c.saldoActual, 0)
+    ? cargosPropietarios(ultimoPeriodo.cargos).reduce((acc, c) => acc + c.saldoActual, 0)
     : 0;
 
   const historialMorosidad = periodosRecientes
@@ -26,11 +33,11 @@ export default async function AdminDashboard() {
     .reverse()
     .map((p) => ({
       etiqueta: p.etiqueta,
-      deuda: p.cargos.reduce((acc, c) => acc + c.saldoActual, 0),
+      deuda: cargosPropietarios(p.cargos).reduce((acc, c) => acc + c.saldoActual, 0),
     }));
 
   const topDeudores = ultimoPeriodo
-    ? [...ultimoPeriodo.cargos]
+    ? cargosPropietarios(ultimoPeriodo.cargos)
         .filter((c) => c.saldoActual > 0)
         .sort((a, b) => b.saldoActual - a.saldoActual)
         .slice(0, 5)
