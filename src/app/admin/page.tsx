@@ -24,19 +24,14 @@ export default async function AdminDashboard() {
   type Cargo = (typeof periodosRecientes)[number]["cargos"][number];
   const cargosPropietarios = (cargos: Cargo[]) => cargos.filter((c) => !c.unidad.esDesarrollador);
 
-  // Deuda = solo saldos positivos. Los saldos a favor (negativos) NO se
-  // compensan contra la deuda de otras unidades: se muestran aparte.
-  const EPS = 0.01;
+  // Deuda = suma de los saldos de al menos $1.000 (los mismos que figuran en
+  // la lista de deudores). Los saldos a favor no compensan la deuda de otras
+  // unidades, y los centavos/redondeos no cuentan como deuda.
   const resumen = (cargos: Cargo[]) => {
     const propios = cargosPropietarios(cargos);
-    const deudores = propios.filter((c) => c.saldoActual > EPS);
-    const aFavor = propios.filter((c) => c.saldoActual < -EPS);
+    const deudores = propios.filter((c) => c.saldoActual >= MINIMO_DEUDOR);
     return {
       deuda: deudores.reduce((acc, c) => acc + c.saldoActual, 0),
-      unidadesConDeuda: propios.filter((c) => c.saldoActual >= MINIMO_DEUDOR).length,
-      saldoAFavor: aFavor.reduce((acc, c) => acc - c.saldoActual, 0),
-      unidadesAFavor: aFavor.length,
-      unidades: propios.length,
       cobrado: propios.reduce((acc, c) => acc + c.totalPagado, 0),
     };
   };
@@ -51,13 +46,12 @@ export default async function AdminDashboard() {
       return { etiqueta: p.etiqueta, deuda: r.deuda, cobrado: r.cobrado };
     });
 
-  // Top deudores: solo saldos de al menos $1.000 (debajo son diferencias de
+  // Deudores: todas las unidades con saldos de al menos $1.000 (debajo son diferencias de
   // redondeo o centavos, no morosidad real).
   const topDeudores = ultimoPeriodo
     ? cargosPropietarios(ultimoPeriodo.cargos)
         .filter((c) => c.saldoActual >= MINIMO_DEUDOR)
         .sort((a, b) => b.saldoActual - a.saldoActual)
-        .slice(0, 5)
     : [];
 
   const reclamosAbiertos = await prisma.reclamo.count({ where: { estado: { in: ["ABIERTO", "RESPONDIDO"] } } });
@@ -80,25 +74,12 @@ export default async function AdminDashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="card border-l-4 border-red-400">
           <p className="text-sm text-gray-500">Deuda al cierre{ultimoPeriodo ? ` de ${ultimoPeriodo.etiqueta}` : ""}</p>
           <p className="text-2xl font-bold text-red-700">{money(actual?.deuda ?? 0)}</p>
-          <p className="text-xs text-gray-500 mt-1">Suma de saldos pendientes (sin compensar saldos a favor)</p>
-        </div>
-        <div className="card">
-          <p className="text-sm text-gray-500">Unidades con deuda</p>
-          <p className="text-2xl font-bold">
-            {actual?.unidadesConDeuda ?? 0}
-            <span className="text-base font-normal text-gray-400"> / {actual?.unidades ?? 0}</span>
-          </p>
-          <p className="text-xs text-gray-500 mt-1">Con saldo de {money(MINIMO_DEUDOR)} o más (sin Costa Tranvial)</p>
-        </div>
-        <div className="card border-l-4 border-brand-500">
-          <p className="text-sm text-gray-500">Saldos a favor</p>
-          <p className="text-2xl font-bold text-brand-700">{money(actual?.saldoAFavor ?? 0)}</p>
           <p className="text-xs text-gray-500 mt-1">
-            {actual?.unidadesAFavor ?? 0} {actual?.unidadesAFavor === 1 ? "unidad pagó" : "unidades pagaron"} de más
+            {topDeudores.length} {topDeudores.length === 1 ? "unidad" : "unidades"} con deuda
           </p>
         </div>
         <Link href="/admin/reclamos" className="card hover:shadow-md transition-shadow">
@@ -118,14 +99,14 @@ export default async function AdminDashboard() {
         </div>
 
         <div className="card">
-          <p className="text-sm font-medium text-gray-700">Principales deudores</p>
+          <p className="text-sm font-medium text-gray-700">Unidades con deuda</p>
           <p className="text-xs text-gray-500 mb-3">
             {ultimoPeriodo?.etiqueta ?? "Último período"} · saldos desde {money(MINIMO_DEUDOR)}
           </p>
           {topDeudores.length === 0 ? (
             <p className="text-sm text-gray-500">No hay unidades con deuda significativa en el último período.</p>
           ) : (
-            <ul className="divide-y">
+            <ul className="divide-y max-h-80 overflow-y-auto pr-1">
               {topDeudores.map((c, i) => (
                 <li key={c.id} className="py-2 flex justify-between items-center gap-3">
                   <div className="flex items-center gap-3 min-w-0">

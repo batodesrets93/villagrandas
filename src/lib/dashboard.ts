@@ -19,7 +19,7 @@ export async function getEvolucionMorosidad(cantidad = PERIODOS_EVOLUCION): Prom
   const periodos = await prisma.periodoExpensa.findMany({
     orderBy: { fechaInicio: "desc" },
     take: cantidad,
-    include: { cargos: { where: { unidad: { esDesarrollador: false }, saldoActual: { gt: 0.01 } }, select: { saldoActual: true } } },
+    include: { cargos: { where: { unidad: { esDesarrollador: false }, saldoActual: { gte: 1000 } }, select: { saldoActual: true } } },
   });
 
   return periodos
