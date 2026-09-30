@@ -36,8 +36,9 @@ export default async function ExpensasPage() {
           <tbody>
             {periodos.map((p) => {
               // Sin las unidades del desarrollador (Costa Tranvial): su saldo no es deuda del consorcio.
+              // Solo saldos positivos: los saldos a favor no compensan la deuda de otras unidades.
               const deuda = p.cargos
-                .filter((c) => !c.unidad.esDesarrollador)
+                .filter((c) => !c.unidad.esDesarrollador && c.saldoActual > 0.01)
                 .reduce((acc, c) => acc + c.saldoActual, 0);
               return (
                 <tr key={p.id}>
