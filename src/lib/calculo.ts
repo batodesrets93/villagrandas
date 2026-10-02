@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
+import { totalGastosPeriodo } from "@/lib/gastosPeriodo";
 
 export const MONTO_QUINCHO = 50000;
 
@@ -698,7 +699,7 @@ export async function calcularGasPeriodo(
   // gas recien calculado (a diferencia de actualizarPeriodoYCalcular, que
   // la deja intacta).
   const categorias = await prisma.gastoCategoria.findMany({ where: { periodoId } });
-  const totalGastos = categorias.reduce((acc, c) => acc + c.monto, 0);
+  const totalGastos = totalGastosPeriodo(categorias, params);
   await prisma.periodoExpensa.update({ where: { id: periodoId }, data: { totalGastos } });
 
   const { cocheraPorUnidad, bauleraPorUnidad, cocherasIndividuales, baulerasIndividuales } =
@@ -882,7 +883,11 @@ export async function actualizarPeriodoYCalcular(
     categorias: CategoriaInput[];
   }
 ) {
-  const totalGastos = params.categorias.reduce((acc, c) => acc + c.monto, 0);
+  const facturasGas = await prisma.periodoExpensa.findUniqueOrThrow({
+    where: { id: periodoId },
+    select: { facturaGasTorreGrande: true, facturaGasTorreChica: true },
+  });
+  const totalGastos = totalGastosPeriodo(params.categorias, facturasGas);
 
   await prisma.periodoExpensa.update({
     where: { id: periodoId },

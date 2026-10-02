@@ -4,6 +4,7 @@ import { registrarPagoAction, actualizarCalefaccionAction, actualizarAjusteActio
 import { agruparM2ComplementariosPorUnidad, calcularTotalM2Edificio } from "@/lib/calculo";
 import EnviarEmailsButton from "@/components/EnviarEmailsButton";
 import ComprobantesGasto from "@/components/ComprobantesGasto";
+import { lineaGasDesdeFacturas, totalGastosPeriodo } from "@/lib/gastosPeriodo";
 import ImportarPagosForm from "./ImportarPagosForm";
 import EliminarPagoButton from "@/components/EliminarPagoButton";
 
@@ -40,6 +41,8 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
     agruparM2ComplementariosPorUnidad(),
     calcularTotalM2Edificio(),
   ]);
+
+  const lineaGasFacturas = lineaGasDesdeFacturas(periodo.gastos, periodo);
 
   return (
     <div className="space-y-6">
@@ -82,9 +85,18 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                 </td>
               </tr>
             ))}
+            {lineaGasFacturas && (
+              <tr>
+                <td>
+                  Gas <span className="text-xs text-gray-500">(facturas cargadas en Calcular gas)</span>
+                </td>
+                <td className="text-right">{money(lineaGasFacturas.monto)}</td>
+                <td></td>
+              </tr>
+            )}
             <tr className="font-bold">
               <td>Total</td>
-              <td className="text-right">{money(periodo.totalGastos)}</td>
+              <td className="text-right">{money(totalGastosPeriodo(periodo.gastos, periodo))}</td>
               <td></td>
             </tr>
           </tbody>

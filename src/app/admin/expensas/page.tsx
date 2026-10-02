@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { totalGastosPeriodo } from "@/lib/gastosPeriodo";
 import EliminarPeriodoButton from "@/components/EliminarPeriodoButton";
 import EnviarEmailsButton from "@/components/EnviarEmailsButton";
 
@@ -10,7 +11,10 @@ function money(n: number) {
 export default async function ExpensasPage() {
   const periodos = await prisma.periodoExpensa.findMany({
     orderBy: { fechaInicio: "desc" },
-    include: { cargos: { include: { unidad: { select: { esDesarrollador: true } } } } },
+    include: {
+      cargos: { include: { unidad: { select: { esDesarrollador: true } } } },
+      gastos: { select: { nombre: true, monto: true } },
+    },
   });
 
   return (
@@ -44,7 +48,7 @@ export default async function ExpensasPage() {
                 <tr key={p.id}>
                   <td className="font-medium">{p.etiqueta}</td>
                   <td>{p.vencimiento.toLocaleDateString("es-AR")}</td>
-                  <td>{money(p.totalGastos)}</td>
+                  <td>{money(totalGastosPeriodo(p.gastos, p))}</td>
                   <td>{money(deuda)}</td>
                   <td>
                     <div className="flex items-center gap-3">

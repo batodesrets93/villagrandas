@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generarPdfLiquidacion } from "@/lib/pdf";
+import { gastosConGas, totalGastosPeriodo } from "@/lib/gastosPeriodo";
 import { calcularTotalM2Edificio, agruparM2ComplementariosPorUnidad } from "@/lib/calculo";
 
 export async function GET(_req: NextRequest, { params }: { params: { cargoId: string } }) {
@@ -56,12 +57,15 @@ export async function GET(_req: NextRequest, { params }: { params: { cargoId: st
       saldoActual: cargo.saldoActual,
     },
     totalM2Edificio,
-    cargo.periodo.gastos.map((g) => ({
-      nombre: g.nombre,
-      monto: g.monto,
-      esFondoReserva: g.esFondoReserva,
-    })),
-    cargo.periodo.totalGastos
+    gastosConGas(
+      cargo.periodo.gastos.map((g) => ({
+        nombre: g.nombre,
+        monto: g.monto,
+        esFondoReserva: g.esFondoReserva,
+      })),
+      cargo.periodo
+    ),
+    totalGastosPeriodo(cargo.periodo.gastos, cargo.periodo)
   );
 
   const nombreArchivo = `expensa_${cargo.unidad.piso}${cargo.unidad.depto}_${cargo.periodo.etiqueta.replace(/\s+/g, "_")}.pdf`;
