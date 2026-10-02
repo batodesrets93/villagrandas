@@ -149,6 +149,7 @@ export async function generarPdfLiquidacion(
   totalGastosPeriodo: number = 0
 ) {
   const gastosPeriodo = agruparGastosPorNombre(gastosPeriodoSinAgrupar);
+  const hayGas = gastosPeriodo.some((g) => g.nombre.trim().toLowerCase() === "gas");
 
   const doc = await PDFDocument.create();
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -180,7 +181,13 @@ export async function generarPdfLiquidacion(
 
     for (const g of gastosPeriodo) {
       const etiquetaFondo = g.esFondoReserva ? "  (fondo de reserva)" : "";
-      c.fila(g.nombre + etiquetaFondo, money(g.monto));
+      // Si el detalle incluye el gas, la pileta ya esta dentro de la factura
+      // y no suma al total (ver totalGastosPeriodo en gastosPeriodo.ts).
+      const etiquetaPileta =
+        hayGas && g.nombre.trim().toLowerCase() === "agua caliente - espacios comunes"
+          ? "  (incluida en gas)"
+          : "";
+      c.fila(g.nombre + etiquetaFondo + etiquetaPileta, money(g.monto));
     }
 
     c.y -= 4;

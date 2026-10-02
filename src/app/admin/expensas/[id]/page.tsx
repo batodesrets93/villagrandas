@@ -4,7 +4,7 @@ import { registrarPagoAction, actualizarCalefaccionAction, actualizarAjusteActio
 import { agruparM2ComplementariosPorUnidad, calcularTotalM2Edificio } from "@/lib/calculo";
 import EnviarEmailsButton from "@/components/EnviarEmailsButton";
 import ComprobantesGasto from "@/components/ComprobantesGasto";
-import { lineaGasDesdeFacturas, totalGastosPeriodo } from "@/lib/gastosPeriodo";
+import { lineaGasDesdeFacturas, piletaExcluidaDelTotal, totalGastosPeriodo } from "@/lib/gastosPeriodo";
 import ImportarPagosForm from "./ImportarPagosForm";
 import EliminarPagoButton from "@/components/EliminarPagoButton";
 
@@ -43,6 +43,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
   ]);
 
   const lineaGasFacturas = lineaGasDesdeFacturas(periodo.gastos, periodo);
+  const piletaFuera = piletaExcluidaDelTotal(periodo.gastos, periodo);
 
   return (
     <div className="space-y-6">
@@ -70,6 +71,9 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
               <tr key={g.id}>
                 <td>
                   {g.nombre} {g.esFondoReserva && <span className="text-xs text-brand-600">(fondo de reserva)</span>}
+                  {piletaFuera && g.nombre.trim().toLowerCase() === "agua caliente - espacios comunes" && (
+                    <span className="text-xs text-gray-500"> (ya incluida en la factura de gas, no suma al total)</span>
+                  )}
                 </td>
                 <td className="text-right">{money(g.monto)}</td>
                 <td>

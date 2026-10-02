@@ -50,8 +50,35 @@ export function gastosConGas<T extends GastoLinea>(
   return linea ? [...gastos, linea] : gastos;
 }
 
-/** Total de gastos del período, incluyendo las facturas de gas si no estaban como categoria. */
+function esCategoriaPileta(nombre: string): boolean {
+  return nombre.trim().toLowerCase() === "agua caliente - espacios comunes";
+}
+
+/**
+ * Total de gastos del período, incluyendo las facturas de gas si no estaban
+ * como categoria.
+ *
+ * Cuando el total ya incluye el gas (como categoria "Gas" o desde las
+ * facturas de "Calcular gas"), NO se suma la categoria "Agua caliente -
+ * espacios comunes": el gas de la pileta ya esta DENTRO de las facturas de
+ * Camuzzi, y sumarla de nuevo la contaba dos veces (detectado en
+ * Septiembre/2026 comparando contra la planilla de la administradora, que
+ * no la lista aparte: diferencia de $63.209,37). Esa categoria se sigue
+ * usando igual para el prorrateo del gasto comun (ver calculo.ts); esto es
+ * solo el total que se muestra.
+ */
 export function totalGastosPeriodo(gastos: GastoLinea[], facturas: FacturasGas): number {
   const linea = lineaGasDesdeFacturas(gastos, facturas);
-  return gastos.reduce((acc, g) => acc + g.monto, 0) + (linea?.monto ?? 0);
+  const incluyeGas = linea !== null || gastos.some((g) => esCategoriaGas(g.nombre));
+  const suma = gastos.reduce(
+    (acc, g) => (incluyeGas && esCategoriaPileta(g.nombre) ? acc : acc + g.monto),
+    0
+  );
+  return suma + (linea?.monto ?? 0);
+}
+
+/** true si la linea de la pileta queda fuera del total (para aclararlo en pantalla). */
+export function piletaExcluidaDelTotal(gastos: GastoLinea[], facturas: FacturasGas): boolean {
+  const incluyeGas = lineaGasDesdeFacturas(gastos, facturas) !== null || gastos.some((g) => esCategoriaGas(g.nombre));
+  return incluyeGas && gastos.some((g) => esCategoriaPileta(g.nombre));
 }
