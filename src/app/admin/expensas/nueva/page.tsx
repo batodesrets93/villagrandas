@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { crearPeriodoAction } from "@/lib/actions";
+import { leerPlanillaAdmin, formatoPesos, type Planilla } from "@/lib/planillaAdmin";
 
 const CATEGORIAS_SUGERIDAS = [
   "Energía",
@@ -35,6 +36,36 @@ export default function NuevoPeriodoPage() {
   );
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
+  // Planilla de la administradora importada (si se importó): de acá salen
+  // las categorias, las facturas de gas por torre (se guardan en el período
+  // para que "Calcular gas" ya las tenga) y el total para controlar.
+  const [planilla, setPlanilla] = useState<Planilla | null>(null);
+  const [errorPlanilla, setErrorPlanilla] = useState("");
+
+  async function importarPlanilla(archivo: File | undefined) {
+    setErrorPlanilla("");
+    if (!archivo) return;
+    try {
+      const p = await leerPlanillaAdmin(await archivo.arrayBuffer());
+      const nuevos: Grupo[] = p.categorias
+        .map((c) => ({
+          nombre: c.nombre,
+          items: c.items
+            .filter((it) => it.monto > 0)
+            .map((it) => ({
+              monto: it.monto.toFixed(2),
+              fondo: false,
+              excluyeDesarrollador: c.nombre === "Honorarios administración",
+            })),
+        }))
+        .filter((g) => g.items.length > 0);
+      setGrupos(nuevos);
+      setPlanilla(p);
+    } catch (e) {
+      setPlanilla(null);
+      setErrorPlanilla(e instanceof Error ? e.message : "No se pudo leer la planilla.");
+    }
+  }
 
   function actualizarNombreGrupo(gi: number, nombre: string) {
     setGrupos((prev) => prev.map((g, idx) => (idx === gi ? { ...g, nombre } : g)));
@@ -123,6 +154,51 @@ export default function NuevoPeriodoPage() {
             <label className="text-sm font-medium block mb-1">Vencimiento</label>
             <input name="vencimiento" type="date" required />
           </div>
+        </div>
+
+        <div className="card space-y-2">
+          <h2 className="font-semibold">Importar planilla de la administradora</h2>
+          <p className="text-sm text-gray-500">
+            Subí el Excel de gastos que manda la administradora (el de &quot;DETALLE DE GASTOS&quot;) y se cargan solas
+            todas las categorías y montos, incluidas las dos facturas de gas. Revisá que el total coincida antes de
+            liquidar.
+          </p>
+          <input type="file" accept=".xlsx,.xls" onChange={(e) => importarPlanilla(e.target.files?.[0])} />
+          {errorPlanilla && <p className="text-sm text-red-600">{errorPlanilla}</p>}
+          {planilla && (
+            <div className="text-sm space-y-1">
+              <p>
+                Planilla: <b>{planilla.titulo || "sin título"}</b> · Total planilla:{" "}
+                <b>{planilla.totalPlanilla != null ? formatoPesos(planilla.totalPlanilla) : "no encontrado"}</b> · Total
+                cargado: <b>{formatoPesos(total)}</b>{" "}
+                {planilla.totalPlanilla != null &&
+                  (Math.abs(planilla.totalPlanilla - total) <= 0.01 ? (
+                    <span className="text-green-700">✓ coinciden</span>
+                  ) : (
+                    <span className="text-red-600">✗ no coinciden</span>
+                  ))}
+              </p>
+              {(planilla.facturaGasTorreGrande != null || planilla.facturaGasTorreChica != null) && (
+                <p className="text-gray-600">
+                  Facturas de gas: Torre Grande{" "}
+                  {planilla.facturaGasTorreGrande != null ? formatoPesos(planilla.facturaGasTorreGrande) : "-"} · Torre
+                  Chica {planilla.facturaGasTorreChica != null ? formatoPesos(planilla.facturaGasTorreChica) : "-"} (ya
+                  quedan cargadas en Calcular gas)
+                </p>
+              )}
+              {planilla.advertencias.map((a, i) => (
+                <p key={i} className="text-amber-700">
+                  ⚠ {a}
+                </p>
+              ))}
+            </div>
+          )}
+          {planilla?.facturaGasTorreGrande != null && (
+            <input type="hidden" name="facturaGasTorreGrande" value={planilla.facturaGasTorreGrande} />
+          )}
+          {planilla?.facturaGasTorreChica != null && (
+            <input type="hidden" name="facturaGasTorreChica" value={planilla.facturaGasTorreChica} />
+          )}
         </div>
 
         <div className="card">

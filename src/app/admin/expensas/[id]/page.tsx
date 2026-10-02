@@ -6,6 +6,7 @@ import EnviarEmailsButton from "@/components/EnviarEmailsButton";
 import ComprobantesGasto from "@/components/ComprobantesGasto";
 import { lineaGasDesdeFacturas, piletaExcluidaDelTotal, totalGastosPeriodo } from "@/lib/gastosPeriodo";
 import ImportarPagosForm from "./ImportarPagosForm";
+import ControlPlanillaForm from "./ControlPlanillaForm";
 import EliminarPagoButton from "@/components/EliminarPagoButton";
 
 function money(n: number) {
@@ -44,6 +45,21 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
 
   const lineaGasFacturas = lineaGasDesdeFacturas(periodo.gastos, periodo);
   const piletaFuera = piletaExcluidaDelTotal(periodo.gastos, periodo);
+
+  // Para controlar contra la planilla de la administradora: los gastos tal
+  // como ella los lista (sin la pileta, que va dentro de la factura de gas;
+  // y con las dos facturas de gas si no estan cargadas como categoria).
+  const tieneCategoriaGas = periodo.gastos.some((g) => g.nombre.trim().toLowerCase() === "gas");
+  const gastosParaControl = [
+    ...periodo.gastos
+      .filter((g) => g.nombre.trim().toLowerCase() !== "agua caliente - espacios comunes")
+      .map((g) => ({ nombre: g.nombre, monto: g.monto })),
+    ...(tieneCategoriaGas
+      ? []
+      : [periodo.facturaGasTorreGrande, periodo.facturaGasTorreChica]
+          .filter((m): m is number => m != null && m > 0)
+          .map((monto) => ({ nombre: "Gas", monto }))),
+  ];
 
   return (
     <div className="space-y-6">
@@ -106,6 +122,8 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
           </tbody>
         </table>
       </div>
+
+      <ControlPlanillaForm gastos={gastosParaControl} />
 
       <ImportarPagosForm
         cargos={periodo.cargos.map((c) => ({

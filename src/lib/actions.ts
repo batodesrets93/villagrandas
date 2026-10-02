@@ -123,6 +123,22 @@ export async function crearPeriodoAction(formData: FormData): Promise<ResultadoA
 
     const periodo = await crearPeriodoYCalcular({ etiqueta, fechaInicio, fechaFin, vencimiento, categorias });
 
+    // Facturas de gas por torre que vienen de la planilla importada: se
+    // guardan en el período para que "Calcular gas" ya las tenga cargadas
+    // (y no haya que tipearlas de nuevo, que es donde aparecian diferencias
+    // de centavos contra la planilla).
+    const facturaGrande = parseMonto(formData.get("facturaGasTorreGrande") as string | null);
+    const facturaChica = parseMonto(formData.get("facturaGasTorreChica") as string | null);
+    if (facturaGrande > 0 || facturaChica > 0) {
+      await prisma.periodoExpensa.update({
+        where: { id: periodo.id },
+        data: {
+          ...(facturaGrande > 0 ? { facturaGasTorreGrande: facturaGrande } : {}),
+          ...(facturaChica > 0 ? { facturaGasTorreChica: facturaChica } : {}),
+        },
+      });
+    }
+
     revalidatePath("/admin/expensas");
     return { ok: true, data: { id: periodo.id } };
   } catch (e) {
