@@ -22,6 +22,8 @@ export async function GET(_req: NextRequest, { params }: { params: { cargoId: st
   const esDueño = session.user.rol === "PROPIETARIO" && session.user.unidadId === cargo.unidadId;
   const esAdmin = session.user.rol === "ADMIN";
   if (!esDueño && !esAdmin) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  // El propietario no puede bajar una liquidación que todavía no se le envió.
+  if (!esAdmin && !cargo.visiblePropietario) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
   const totalM2Edificio = await calcularTotalM2Edificio();
   const m2ComplementariosPorUnidad = await agruparM2ComplementariosPorUnidad();

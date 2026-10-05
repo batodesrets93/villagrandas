@@ -173,7 +173,10 @@ model PeriodoExpensa {
   fechaFin    DateTime
   vencimiento DateTime
   totalGastos Float     @default(0)
+  // Período bloqueado por el admin: ya no se puede modificar nada que
+  // cambie sus números (ver src/lib/bloqueo.ts). cerradoAt guarda cuándo.
   cerrado     Boolean   @default(false)
+  cerradoAt   DateTime?
   createdAt   DateTime  @default(now())
 
   // Totales de las dos facturas de gas del periodo (Torre Grande y Torre
@@ -261,6 +264,14 @@ model CargoUnidadPeriodo {
   saldoAnterior Float          @default(0)
   totalPagado   Float          @default(0)
   saldoActual   Float
+
+  // Si el propietario puede ver esta liquidación en la web (y bajar su
+  // PDF). Al crear un período nuevo arranca en false y pasa a true cuando
+  // el admin le envía la liquidación por email a esa unidad: así no se ve
+  // a medio editar. El default true es solo para las liquidaciones que ya
+  // existían antes de este cambio (ya se habían enviado).
+  visiblePropietario Boolean   @default(true)
+  enviadoAt          DateTime?
 
   pagos           Pago[]
   pagosInformados PagoInformado[]

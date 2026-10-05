@@ -27,8 +27,10 @@ export default async function PropietarioPage() {
     where: { id: session!.user.unidadId! },
   });
 
+  // Solo las liquidaciones que ya se le enviaron por email: mientras el
+  // admin está armando/corrigiendo el período, el propietario no lo ve.
   const cargos = await prisma.cargoUnidadPeriodo.findMany({
-    where: { unidadId: unidad.id },
+    where: { unidadId: unidad.id, visiblePropietario: true },
     include: {
       periodo: {
         include: {

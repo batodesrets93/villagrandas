@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { totalGastosPeriodo } from "@/lib/gastosPeriodo";
+import { asegurarCargoAbierto, asegurarPeriodoAbierto } from "@/lib/bloqueo";
 
 export const MONTO_QUINCHO = 50000;
 
@@ -337,6 +338,8 @@ export async function crearPeriodoYCalcular(params: {
           saldoAnterior: c.saldoAnterior,
           totalPagado: c.totalPagado,
           saldoActual: c.saldoActual,
+          // No se muestra al propietario hasta que se le envíe por email.
+          visiblePropietario: false,
         })),
       });
 
@@ -390,6 +393,7 @@ export async function registrarPago(
   nota?: string,
   fecha?: Date
 ) {
+  await asegurarCargoAbierto(cargoId);
   return prisma.$transaction(async (tx) => {
     await tx.pago.create({ data: { cargoId, monto, medio, nota, ...(fecha ? { fecha } : {}) } });
     const pagos = await tx.pago.aggregate({ where: { cargoId }, _sum: { monto: true } });
@@ -413,6 +417,8 @@ export async function registrarPago(
  * quedar en un estado inconsistente (CONFIRMADO pero sin Pago vinculado).
  */
 export async function eliminarPago(pagoId: string) {
+  const pagoAEliminar = await prisma.pago.findUniqueOrThrow({ where: { id: pagoId }, select: { cargoId: true } });
+  await asegurarCargoAbierto(pagoAEliminar.cargoId);
   return prisma.$transaction(async (tx) => {
     const pago = await tx.pago.findUniqueOrThrow({
       where: { id: pagoId },
@@ -458,21 +464,43 @@ export async function confirmarPagoInformado(
       throw new Error("Este pago informado ya fue procesado antes.");
     }
 
+    // Si el período sobre el que el propietario informó el pago ya está
+    // bloqueado, el pago se imputa en la liquidación abierta más reciente
+    // de esa unidad (que es la que arrastra el saldo hacia adelante).
+    let cargoDestinoId = informado.cargoId;
+    const cargoInformado = await tx.cargoUnidadPeriodo.findUniqueOrThrow({
+      where: { id: informado.cargoId },
+      select: { unidadId: true, periodo: { select: { cerrado: true } } },
+    });
+    if (cargoInformado.periodo.cerrado) {
+      const cargoAbierto = await tx.cargoUnidadPeriodo.findFirst({
+        where: { unidadId: cargoInformado.unidadId, periodo: { cerrado: false } },
+        orderBy: { periodo: { fechaInicio: "desc" } },
+        select: { id: true },
+      });
+      if (!cargoAbierto) {
+        throw new Error(
+          "El período de este pago está bloqueado y la unidad no tiene ninguna liquidación abierta donde imputarlo. Creá el período nuevo (o desbloqueá el anterior) y volvé a confirmarlo."
+        );
+      }
+      cargoDestinoId = cargoAbierto.id;
+    }
+
     const pago = await tx.pago.create({
       data: {
-        cargoId: informado.cargoId,
+        cargoId: cargoDestinoId,
         monto: informado.monto,
         medio: opts?.medio || informado.medio || undefined,
         nota: informado.nota || undefined,
       },
     });
 
-    const pagos = await tx.pago.aggregate({ where: { cargoId: informado.cargoId }, _sum: { monto: true } });
+    const pagos = await tx.pago.aggregate({ where: { cargoId: cargoDestinoId }, _sum: { monto: true } });
     const totalPagado = pagos._sum.monto ?? 0;
-    const cargo = await tx.cargoUnidadPeriodo.findUniqueOrThrow({ where: { id: informado.cargoId } });
+    const cargo = await tx.cargoUnidadPeriodo.findUniqueOrThrow({ where: { id: cargoDestinoId } });
     const saldoActual = cargo.total + cargo.saldoAnterior - totalPagado;
     await tx.cargoUnidadPeriodo.update({
-      where: { id: informado.cargoId },
+      where: { id: cargoDestinoId },
       data: { totalPagado, saldoActual },
     });
 
@@ -528,6 +556,7 @@ export async function calcularGasPeriodo(
     lecturas: { unidadId: string; lecturaActual: number; lecturaAnteriorInicial?: number }[];
   }
 ) {
+  await asegurarPeriodoAbierto(periodoId);
   await prisma.periodoExpensa.update({
     where: { id: periodoId },
     data: {
@@ -838,6 +867,7 @@ export async function calcularGasPeriodo(
 }
 
 export async function actualizarCalefaccion(cargoId: string, calefaccion: number) {
+  await asegurarCargoAbierto(cargoId);
   const cargo = await prisma.cargoUnidadPeriodo.findUniqueOrThrow({ where: { id: cargoId } });
   const total = cargo.gastoComun + cargo.cochera + cargo.baulera + cargo.quincho + calefaccion + cargo.ajuste;
   const saldoActual = total + cargo.saldoAnterior - cargo.totalPagado;
@@ -856,6 +886,7 @@ export async function actualizarCalefaccion(cargoId: string, calefaccion: number
  * es un texto libre para dejar constancia de por que se cargo.
  */
 export async function actualizarAjuste(cargoId: string, ajuste: number, ajusteConcepto: string | null) {
+  await asegurarCargoAbierto(cargoId);
   const cargo = await prisma.cargoUnidadPeriodo.findUniqueOrThrow({ where: { id: cargoId } });
   const total = cargo.gastoComun + cargo.cochera + cargo.baulera + cargo.quincho + cargo.calefaccion + ajuste;
   const saldoActual = total + cargo.saldoAnterior - cargo.totalPagado;
@@ -883,6 +914,7 @@ export async function actualizarPeriodoYCalcular(
     categorias: CategoriaInput[];
   }
 ) {
+  await asegurarPeriodoAbierto(periodoId);
   const facturasGas = await prisma.periodoExpensa.findUniqueOrThrow({
     where: { id: periodoId },
     select: { facturaGasTorreGrande: true, facturaGasTorreChica: true },

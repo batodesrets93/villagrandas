@@ -21,6 +21,7 @@ import {
   MONTO_QUINCHO,
 } from "@/lib/calculo";
 import { generarPdfLiquidacion } from "@/lib/pdf";
+import { asegurarPeriodoAbierto, esPeriodoBloqueadoError } from "@/lib/bloqueo";
 import {
   enviarLiquidacionPorEmail,
   enviarRespuestaReclamoPorEmail,
@@ -193,6 +194,7 @@ export async function actualizarPeriodoAction(formData: FormData): Promise<Resul
     return { ok: true, data: { id: periodoId } };
   } catch (e) {
     console.error("[actualizarPeriodoAction] Error inesperado:", e);
+    if (esPeriodoBloqueadoError(e)) return { ok: false, error: e.message };
     return {
       ok: false,
       error: "No se pudo actualizar el período por un error inesperado en el servidor. Probá de nuevo en un minuto.",
@@ -235,6 +237,7 @@ export async function eliminarPagoAction(formData: FormData): Promise<ResultadoA
     return { ok: true, data: undefined };
   } catch (e) {
     console.error("[eliminarPagoAction] Error inesperado:", e);
+    if (esPeriodoBloqueadoError(e)) return { ok: false, error: e.message };
     return {
       ok: false,
       error: "No se pudo eliminar el pago por un error inesperado en el servidor. Probá de nuevo en un minuto.",
@@ -352,6 +355,7 @@ export async function calcularGasAction(formData: FormData): Promise<ResultadoAc
     return { ok: true, data: { id: periodoId } };
   } catch (e) {
     console.error("[calcularGasAction] Error inesperado:", e);
+    if (esPeriodoBloqueadoError(e)) return { ok: false, error: e.message };
     return {
       ok: false,
       error:
@@ -365,6 +369,7 @@ export async function eliminarPeriodoAction(formData: FormData): Promise<Resulta
   try {
     await requireAdmin();
     const periodoId = String(formData.get("periodoId"));
+    await asegurarPeriodoAbierto(periodoId);
 
     await prisma.$transaction(async (tx) => {
       const cargos = await tx.cargoUnidadPeriodo.findMany({ where: { periodoId }, select: { id: true } });
@@ -384,7 +389,57 @@ export async function eliminarPeriodoAction(formData: FormData): Promise<Resulta
     return { ok: true, data: undefined };
   } catch (e) {
     console.error("[eliminarPeriodoAction] Error inesperado:", e);
+    if (esPeriodoBloqueadoError(e)) return { ok: false, error: e.message };
     return { ok: false, error: "No se pudo eliminar el período por un error inesperado. Probá de nuevo." };
+  }
+}
+
+export async function bloquearPeriodoAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    await requireAdmin();
+    const periodoId = String(formData.get("periodoId") || "");
+    const bloquear = String(formData.get("bloquear")) === "1";
+    if (!periodoId) return { ok: false, error: "No se encontró el período." };
+
+    await prisma.periodoExpensa.update({
+      where: { id: periodoId },
+      data: { cerrado: bloquear, cerradoAt: bloquear ? new Date() : null },
+    });
+
+    revalidatePath("/admin/expensas");
+    revalidatePath("/admin/expensas/" + periodoId);
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[bloquearPeriodoAction] Error inesperado:", e);
+    return { ok: false, error: "No se pudo cambiar el bloqueo del período. Probá de nuevo en un minuto." };
+  }
+}
+
+/**
+ * Vuelve a ocultar a los propietarios todas las liquidaciones de un período
+ * (por ejemplo, si se envió antes de tiempo o hay que corregirlo). Se
+ * vuelven a ver recién cuando se reenvían por email.
+ */
+export async function ocultarPeriodoAction(formData: FormData): Promise<ResultadoAccion<{ ocultadas: number }>> {
+  try {
+    await requireAdmin();
+    const periodoId = String(formData.get("periodoId") || "");
+    if (!periodoId) return { ok: false, error: "No se encontró el período." };
+    await asegurarPeriodoAbierto(periodoId);
+
+    const r = await prisma.cargoUnidadPeriodo.updateMany({
+      where: { periodoId, visiblePropietario: true },
+      data: { visiblePropietario: false },
+    });
+
+    revalidatePath("/admin/expensas");
+    revalidatePath("/admin/expensas/" + periodoId);
+    revalidatePath("/propietario");
+    return { ok: true, data: { ocultadas: r.count } };
+  } catch (e) {
+    console.error("[ocultarPeriodoAction] Error inesperado:", e);
+    if (esPeriodoBloqueadoError(e)) return { ok: false, error: e.message };
+    return { ok: false, error: "No se pudo ocultar el período. Probá de nuevo en un minuto." };
   }
 }
 
@@ -477,9 +532,17 @@ export async function enviarLiquidacionesPorEmailAction(
           nombreArchivo,
         });
       }
+      // Recién ahora el propietario puede ver esta liquidación en la web.
+      await prisma.cargoUnidadPeriodo.update({
+        where: { id: cargo.id },
+        data: { visiblePropietario: true, enviadoAt: new Date() },
+      });
       enviados++;
     }
 
+    revalidatePath("/admin/expensas");
+    revalidatePath("/admin/expensas/" + periodoId);
+    revalidatePath("/propietario");
     return { ok: true, data: { enviados, sinEmail } };
   } catch (e) {
     console.error("[enviarLiquidacionesPorEmailAction] Error inesperado:", e);
@@ -520,6 +583,7 @@ export async function subirComprobanteAction(formData: FormData): Promise<Result
     if (!gasto) {
       return { ok: false, error: "No se encontró el gasto correspondiente." };
     }
+    await asegurarPeriodoAbierto(gasto.periodoId);
 
     const buffer = Buffer.from(await archivo.arrayBuffer());
 
@@ -538,6 +602,7 @@ export async function subirComprobanteAction(formData: FormData): Promise<Result
     return { ok: true, data: undefined };
   } catch (e) {
     console.error("[subirComprobanteAction] Error inesperado:", e);
+    if (esPeriodoBloqueadoError(e)) return { ok: false, error: e.message };
     return {
       ok: false,
       error: "No se pudo subir el comprobante por un error inesperado en el servidor. Probá de nuevo en un minuto.",
@@ -557,6 +622,7 @@ export async function eliminarComprobanteAction(formData: FormData): Promise<Res
     if (!comprobante) {
       return { ok: false, error: "No se encontró el comprobante." };
     }
+    await asegurarPeriodoAbierto(comprobante.gasto.periodoId);
 
     await prisma.comprobante.delete({ where: { id: comprobanteId } });
 
@@ -565,6 +631,7 @@ export async function eliminarComprobanteAction(formData: FormData): Promise<Res
     return { ok: true, data: undefined };
   } catch (e) {
     console.error("[eliminarComprobanteAction] Error inesperado:", e);
+    if (esPeriodoBloqueadoError(e)) return { ok: false, error: e.message };
     return {
       ok: false,
       error: "No se pudo eliminar el comprobante por un error inesperado en el servidor. Probá de nuevo en un minuto.",
@@ -953,9 +1020,9 @@ export async function informarPagoAction(formData: FormData): Promise<ResultadoA
 
     const cargo = await prisma.cargoUnidadPeriodo.findUnique({
       where: { id: cargoId },
-      select: { unidadId: true },
+      select: { unidadId: true, visiblePropietario: true },
     });
-    if (!cargo || cargo.unidadId !== session.user.unidadId) {
+    if (!cargo || cargo.unidadId !== session.user.unidadId || !cargo.visiblePropietario) {
       return { ok: false, error: "No autorizado." };
     }
 

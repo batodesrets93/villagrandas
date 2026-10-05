@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { registrarPagoAction, actualizarCalefaccionAction, actualizarAjusteAction } from "@/lib/actions";
 import { agruparM2ComplementariosPorUnidad, calcularTotalM2Edificio } from "@/lib/calculo";
 import EnviarEmailsButton from "@/components/EnviarEmailsButton";
+import BloquearPeriodoButton from "@/components/BloquearPeriodoButton";
+import OcultarPeriodoButton from "@/components/OcultarPeriodoButton";
 import ComprobantesGasto from "@/components/ComprobantesGasto";
 import { lineaGasDesdeFacturas, piletaExcluidaDelTotal, totalGastosPeriodo } from "@/lib/gastosPeriodo";
 import ImportarPagosForm from "./ImportarPagosForm";
@@ -32,7 +34,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
         orderBy: { orden: "asc" },
         include: { comprobantes: { select: { id: true, nombreArchivo: true, tipoArchivo: true, tamanio: true } } },
       },
-      cargos: { include: { unidad: true, pagos: true }, orderBy: [{ unidad: { torre: "asc" } }, { unidad: { piso: "asc" } }, { unidad: { depto: "asc" } }] },
+      cargos: { include: { unidad: { include: { usuarios: { select: { id: true } } } }, pagos: true }, orderBy: [{ unidad: { torre: "asc" } }, { unidad: { piso: "asc" } }, { unidad: { depto: "asc" } }] },
     },
   });
 
@@ -61,8 +63,18 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
           .map((monto) => ({ nombre: "Gas", monto }))),
   ];
 
+  const bloqueado = periodo.cerrado;
+
   return (
     <div className="space-y-6">
+      {bloqueado && (
+        <div className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-700">
+          🔒 <strong>Período bloqueado</strong>
+          {periodo.cerradoAt && <> el {periodo.cerradoAt.toLocaleDateString("es-AR")}</>}. No se pueden modificar
+          gastos, gas, calefacción, ajustes, pagos ni comprobantes. Los pagos informados sobre este mes se imputan en
+          la liquidación abierta más nueva de cada unidad.
+        </div>
+      )}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-brand-700">{periodo.etiqueta}</h1>
@@ -71,11 +83,17 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
             {periodo.vencimiento.toLocaleDateString("es-AR")}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href={`/admin/expensas/${periodo.id}/gas`} className="btn btn-secondary text-sm">
-            Calcular gas / calefacción
-          </Link>
+        <div className="flex items-start gap-2">
+          {!bloqueado && (
+            <Link href={`/admin/expensas/${periodo.id}/gas`} className="btn btn-secondary text-sm">
+              Calcular gas / calefacción
+            </Link>
+          )}
           <EnviarEmailsButton periodoId={periodo.id} etiqueta={periodo.etiqueta} />
+          {!bloqueado && periodo.cargos.some((c) => c.visiblePropietario) && (
+            <OcultarPeriodoButton periodoId={periodo.id} etiqueta={periodo.etiqueta} />
+          )}
+          <BloquearPeriodoButton periodoId={periodo.id} etiqueta={periodo.etiqueta} cerrado={bloqueado} />
         </div>
       </div>
 
@@ -94,6 +112,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                 <td className="text-right">{money(g.monto)}</td>
                 <td>
                   <ComprobantesGasto
+                    bloqueado={bloqueado}
                     gastoId={g.id}
                     comprobantes={g.comprobantes.map((c) => ({
                       id: c.id,
@@ -125,6 +144,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
 
       <ControlPlanillaForm gastos={gastosParaControl} />
 
+      {!bloqueado && (
       <ImportarPagosForm
         cargos={periodo.cargos.map((c) => ({
           id: c.id,
@@ -135,6 +155,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
           saldoActual: c.saldoActual,
         }))}
       />
+      )}
 
       <div className="card overflow-x-auto">
         <h2 className="font-semibold mb-3">Liquidación por unidad ({periodo.cargos.length})</h2>
@@ -176,6 +197,14 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                   ) : (
                     <>
                       {c.unidad.torre === "GRANDE" ? "TG" : "TC"} {c.unidad.piso}º{c.unidad.depto}
+                      {c.unidad.usuarios.length > 0 && !c.visiblePropietario && (
+                        <div
+                          className="text-[10px] font-normal text-amber-700 whitespace-nowrap"
+                          title="Todavía no se le envió por email: el propietario no la ve en la web"
+                        >
+                          No enviada
+                        </div>
+                      )}
                     </>
                   )}
                 </td>
@@ -209,6 +238,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                 <td className="whitespace-nowrap">{esConsolidada ? <span className="text-gray-300">—</span> : money(c.quincho)}</td>
                 <td>
                   <span className="whitespace-nowrap">{money(c.calefaccion)}</span>
+                  {!bloqueado && (
                   <details className="mt-1">
                     <summary className="cursor-pointer text-xs text-gray-400">Corregir</summary>
                     <form action={actualizarCalefaccionAction} className="flex gap-1 mt-1">
@@ -222,6 +252,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                       <button className="btn btn-secondary text-xs px-2">OK</button>
                     </form>
                   </details>
+                  )}
                 </td>
                 <td className={c.ajuste < 0 ? "text-red-600" : c.ajuste > 0 ? "text-brand-700" : undefined}>
                   <span className="whitespace-nowrap">{money(c.ajuste)}</span>
@@ -230,6 +261,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                       {c.ajusteConcepto}
                     </div>
                   )}
+                  {!bloqueado && (
                   <details className="mt-1">
                     <summary className="cursor-pointer text-xs text-gray-400">Cargar/editar</summary>
                     <form action={actualizarAjusteAction} className="flex flex-col gap-1 mt-1 w-32">
@@ -249,6 +281,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                       <button className="btn btn-secondary text-xs px-2">OK</button>
                     </form>
                   </details>
+                  )}
                 </td>
                 <td className="font-medium whitespace-nowrap">{money(c.total)}</td>
                 <td className="whitespace-nowrap">{money(c.saldoAnterior)}</td>
@@ -259,6 +292,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                     Descargar PDF
                   </a>
                   <EnviarEmailsButton periodoId={periodo.id} etiqueta={periodo.etiqueta} cargoId={c.id} />
+                  {!bloqueado && (
                   <details>
                     <summary className="cursor-pointer text-xs text-gray-500">Registrar pago</summary>
                     <form action={registrarPagoAction} className="mt-1 space-y-1 w-36">
@@ -273,6 +307,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                       <button className="btn btn-primary w-full text-xs">Guardar</button>
                     </form>
                   </details>
+                  )}
                   {c.pagos.length > 0 && (
                     <details>
                       <summary className="cursor-pointer text-xs text-gray-500">Pagos ({c.pagos.length})</summary>
@@ -283,7 +318,7 @@ export default async function DetallePeriodoPage({ params }: { params: { id: str
                               {p.fecha.toLocaleDateString("es-AR")} · {money(p.monto)}
                               {p.medio && ` · ${p.medio}`}
                             </span>
-                            <EliminarPagoButton pagoId={p.id} etiqueta={`de ${money(p.monto)} (${p.fecha.toLocaleDateString("es-AR")})`} />
+                            {!bloqueado && <EliminarPagoButton pagoId={p.id} etiqueta={`de ${money(p.monto)} (${p.fecha.toLocaleDateString("es-AR")})`} />}
                           </li>
                         ))}
                       </ul>

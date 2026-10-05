@@ -59,12 +59,19 @@ export default async function GasPeriodoPage({ params }: { params: { id: string 
         </p>
       </div>
 
+      {periodo.cerrado ? (
+        <div className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-700">
+          🔒 Este período está bloqueado, no se puede modificar. Si hace falta corregir algo, desbloquealo primero
+          desde Expensas.
+        </div>
+      ) : (
       <CalcularGasForm
         periodoId={periodo.id}
         facturaGasTorreGrandeInicial={periodo.facturaGasTorreGrande ?? undefined}
         facturaGasTorreChicaInicial={periodo.facturaGasTorreChica ?? undefined}
         unidades={unidadesConLecturas}
       />
+      )}
     </div>
   );
 }

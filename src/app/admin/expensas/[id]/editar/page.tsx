@@ -22,6 +22,12 @@ export default async function EditarPeriodoPage({ params }: { params: { id: stri
         </p>
       </div>
 
+      {periodo.cerrado ? (
+        <div className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-700">
+          🔒 Este período está bloqueado, no se puede modificar. Si hace falta corregir algo, desbloquealo primero
+          desde Expensas.
+        </div>
+      ) : (
       <EditarPeriodoForm
         periodoId={periodo.id}
         etiqueta={periodo.etiqueta}
@@ -35,6 +41,7 @@ export default async function EditarPeriodoPage({ params }: { params: { id: stri
           excluyeDesarrollador: g.excluyeDesarrollador,
         }))}
       />
+      )}
     </div>
   );
 }

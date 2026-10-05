@@ -23,9 +23,12 @@ function tamanioTexto(bytes: number) {
 export default function ComprobantesGasto({
   gastoId,
   comprobantes,
+  bloqueado = false,
 }: {
   gastoId: string;
   comprobantes: ComprobanteInfo[];
+  /** Período bloqueado: solo se pueden ver los comprobantes, no subir ni borrar. */
+  bloqueado?: boolean;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -92,6 +95,7 @@ export default function ComprobantesGasto({
                 {c.nombreArchivo}
               </a>
               <span className="text-gray-400">({tamanioTexto(c.tamanio)})</span>
+              {!bloqueado && (
               <button
                 onClick={() => onEliminar(c.id)}
                 disabled={eliminandoId === c.id}
@@ -99,11 +103,13 @@ export default function ComprobantesGasto({
               >
                 {eliminandoId === c.id ? "..." : "Eliminar"}
               </button>
+              )}
             </li>
           ))}
         </ul>
       )}
 
+      {!bloqueado && (
       <div className="flex items-center gap-2">
         <input
           ref={inputRef}
@@ -116,6 +122,7 @@ export default function ComprobantesGasto({
         />
         {subiendo && <span className="text-xs text-gray-400">Subiendo...</span>}
       </div>
+      )}
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
