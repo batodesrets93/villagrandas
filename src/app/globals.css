@@ -77,3 +77,58 @@ td.sticky-col {
   background: white;
   z-index: 1;
 }
+
+/* Botones chicos / con borde (lista de períodos y otras tablas). */
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+.btn-outline {
+  background-color: white;
+  color: #1c4534;
+  border: 1px solid #cfdcd5;
+}
+.btn-outline:hover {
+  background-color: #f2f6f4;
+}
+
+/* Ítems del menú "Acciones". */
+.menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.85rem;
+  text-align: left;
+  color: #111827;
+}
+.menu-item:hover:not(:disabled) {
+  background-color: #f2f6f4;
+}
+.menu-item:disabled {
+  opacity: 0.6;
+}
+.menu-item-danger {
+  color: #b91c1c;
+}
+.menu-item-danger:hover:not(:disabled) {
+  background-color: #fef2f2;
+}
+.menu-sep {
+  margin: 0.25rem 0;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* Etiquetas de estado. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  padding: 0.125rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}

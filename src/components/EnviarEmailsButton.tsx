@@ -7,11 +7,14 @@ export default function EnviarEmailsButton({
   periodoId,
   etiqueta,
   cargoId,
+  enMenu = false,
 }: {
   periodoId: string;
   etiqueta: string;
   /** Si se pasa, envía solo el email de esa unidad. Si no, envía a todas las unidades del período. */
   cargoId?: string;
+  /** Se muestra como ítem del menú "Acciones" de la lista. */
+  enMenu?: boolean;
 }) {
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState("");
@@ -47,6 +50,19 @@ export default function EnviarEmailsButton({
       texto += ` Sin acceso/email registrado: ${sinEmail.join(", ")}.`;
     }
     setMensaje(texto);
+  }
+
+  if (enMenu) {
+    return (
+      <div>
+        <button role="menuitem" onClick={onClick} disabled={enviando} className="menu-item">
+          <span aria-hidden>✉️</span>
+          {enviando ? "Enviando..." : "Enviar por email a todos"}
+        </button>
+        {mensaje && <p className="px-3.5 pb-2 text-xs text-green-700">{mensaje}</p>}
+        {error && <p className="px-3.5 pb-2 text-xs text-red-600">{error}</p>}
+      </div>
+    );
   }
 
   return (

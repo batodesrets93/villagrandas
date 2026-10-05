@@ -4,7 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { eliminarPeriodoAction } from "@/lib/actions";
 
-export default function EliminarPeriodoButton({ periodoId, etiqueta }: { periodoId: string; etiqueta: string }) {
+export default function EliminarPeriodoButton({
+  periodoId,
+  etiqueta,
+  enMenu = false,
+}: {
+  periodoId: string;
+  etiqueta: string;
+  /** Se muestra como ítem del menú "Acciones" de la lista. */
+  enMenu?: boolean;
+}) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -26,6 +35,18 @@ export default function EliminarPeriodoButton({ periodoId, etiqueta }: { periodo
       return;
     }
     router.refresh();
+  }
+
+  if (enMenu) {
+    return (
+      <div>
+        <button role="menuitem" onClick={onClick} disabled={cargando} className="menu-item menu-item-danger">
+          <span aria-hidden>🗑️</span>
+          {cargando ? "Eliminando..." : "Eliminar período"}
+        </button>
+        {error && <p className="px-3.5 pb-2 text-xs text-red-600">{error}</p>}
+      </div>
+    );
   }
 
   return (

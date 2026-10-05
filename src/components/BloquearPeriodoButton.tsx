@@ -13,10 +13,13 @@ export default function BloquearPeriodoButton({
   periodoId,
   etiqueta,
   cerrado,
+  enMenu = false,
 }: {
   periodoId: string;
   etiqueta: string;
   cerrado: boolean;
+  /** Se muestra como ítem del menú "Acciones" de la lista. */
+  enMenu?: boolean;
 }) {
   const router = useRouter();
   const [cargando, setCargando] = useState(false);
@@ -49,6 +52,18 @@ export default function BloquearPeriodoButton({
       return;
     }
     router.refresh();
+  }
+
+  if (enMenu) {
+    return (
+      <div>
+        <button role="menuitem" onClick={onClick} disabled={cargando} className="menu-item">
+          <span aria-hidden>{cerrado ? "🔓" : "🔒"}</span>
+          {cargando ? "..." : cerrado ? "Desbloquear período" : "Bloquear período"}
+        </button>
+        {error && <p className="px-3.5 pb-2 text-xs text-red-600">{error}</p>}
+      </div>
+    );
   }
 
   return (

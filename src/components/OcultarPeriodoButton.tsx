@@ -5,7 +5,16 @@ import { useRouter } from "next/navigation";
 import { ocultarPeriodoAction } from "@/lib/actions";
 
 /** Oculta el período a los propietarios hasta que se vuelva a enviar por email. */
-export default function OcultarPeriodoButton({ periodoId, etiqueta }: { periodoId: string; etiqueta: string }) {
+export default function OcultarPeriodoButton({
+  periodoId,
+  etiqueta,
+  enMenu = false,
+}: {
+  periodoId: string;
+  etiqueta: string;
+  /** Se muestra como ítem del menú "Acciones" de la lista. */
+  enMenu?: boolean;
+}) {
   const router = useRouter();
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
@@ -26,6 +35,18 @@ export default function OcultarPeriodoButton({ periodoId, etiqueta }: { periodoI
       return;
     }
     router.refresh();
+  }
+
+  if (enMenu) {
+    return (
+      <div>
+        <button role="menuitem" onClick={onClick} disabled={cargando} className="menu-item">
+          <span aria-hidden>🙈</span>
+          {cargando ? "Ocultando..." : "Ocultar a propietarios"}
+        </button>
+        {error && <p className="px-3.5 pb-2 text-xs text-red-600">{error}</p>}
+      </div>
+    );
   }
 
   return (
