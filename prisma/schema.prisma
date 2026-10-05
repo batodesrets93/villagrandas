@@ -406,6 +406,7 @@ model Reclamo {
   respuesta    String?
   createdAt    DateTime      @default(now())
   respondidoAt DateTime?
+  respuestaVistaAt DateTime?
   adjuntos     AdjuntoReclamo[]
 }
 

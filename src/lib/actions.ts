@@ -1273,6 +1273,34 @@ export async function responderReclamoAction(formData: FormData) {
   }
 }
 
+export async function cerrarReclamoAction(formData: FormData) {
+  await requireAdmin();
+  const reclamoId = String(formData.get("reclamoId"));
+  await prisma.reclamo.update({ where: { id: reclamoId }, data: { estado: "CERRADO" } });
+  revalidatePath("/admin/reclamos");
+  revalidatePath("/propietario/reclamos");
+}
+
+export async function reabrirReclamoAction(formData: FormData) {
+  await requireAdmin();
+  const reclamoId = String(formData.get("reclamoId"));
+  const actual = await prisma.reclamo.findUnique({ where: { id: reclamoId }, select: { respuesta: true } });
+  await prisma.reclamo.update({
+    where: { id: reclamoId },
+    data: { estado: actual?.respuesta ? "RESPONDIDO" : "ABIERTO" },
+  });
+  revalidatePath("/admin/reclamos");
+  revalidatePath("/propietario/reclamos");
+}
+
+// Marca como vistas las respuestas de reclamos de la unidad del propietario logueado.
+export async function marcarRespuestasReclamosVistasAction() {
+  const session = await getServerSession(authOptions);
+  const unidadId = (session?.user as any)?.unidadId as string | undefined;
+  if (!session || !unidadId) return;
+  await prisma.$executeRaw`UPDATE "Reclamo" SET "respuestaVistaAt" = NOW() WHERE "unidadId" = ${unidadId} AND "respondidoAt" IS NOT NULL AND ("respuestaVistaAt" IS NULL OR "respuestaVistaAt" < "respondidoAt")`;
+}
+
 export async function cambiarPasswordAction(formData: FormData): Promise<ResultadoAccion> {
   try {
     const session = await getServerSession(authOptions);

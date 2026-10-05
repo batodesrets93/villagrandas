@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import NuevoReclamoForm from "./NuevoReclamoForm";
+import MarcarVistos from "./MarcarVistos";
 
 const badge: Record<string, string> = {
   ABIERTO: "bg-red-100 text-red-700",
@@ -39,15 +40,26 @@ export default async function ReclamosPropietarioPage() {
     include: { adjuntos: { select: { id: true, nombreArchivo: true, esRespuesta: true }, orderBy: { createdAt: "asc" } } },
   });
 
+  const esNueva = (r: (typeof reclamos)[number]) =>
+    !!r.respondidoAt && (!r.respuestaVistaAt || r.respuestaVistaAt < r.respondidoAt);
+  const cantNuevas = reclamos.filter(esNueva).length;
+
   return (
     <div className="space-y-6">
+      <MarcarVistos />
       <h1 className="text-2xl font-bold text-brand-700">Reclamos/Sugerencias</h1>
+
+      {cantNuevas > 0 && (
+        <div className="bg-green-50 border border-green-200 text-green-800 rounded-lg p-3 text-sm">
+          🔔 {cantNuevas === 1 ? "Tenés 1 respuesta nueva de administración." : `Tenés ${cantNuevas} respuestas nuevas de administración.`}
+        </div>
+      )}
 
       <NuevoReclamoForm />
 
       <div className="space-y-4">
         {reclamos.map((r) => (
-          <div key={r.id} className="card">
+          <div key={r.id} className={`card ${esNueva(r) ? "ring-2 ring-green-400" : ""}`}>
             <div className="flex items-center justify-between mb-2">
               <span>
                 <span className={`text-xs px-2 py-0.5 rounded-full mr-1 ${tipoBadge[r.tipo] ?? "bg-gray-100 text-gray-600"}`}>
@@ -58,7 +70,10 @@ export default async function ReclamosPropietarioPage() {
                   {categoriaLabel[r.categoria] ?? r.categoria}
                 </span>
               </span>
-              <span className={`text-xs px-2 py-1 rounded-full ${badge[r.estado]}`}>{r.estado}</span>
+              <span className="flex items-center gap-1">
+                {esNueva(r) && <span className="text-xs px-2 py-1 rounded-full bg-green-600 text-white">Respuesta nueva</span>}
+                <span className={`text-xs px-2 py-1 rounded-full ${badge[r.estado]}`}>{r.estado}</span>
+              </span>
             </div>
             <p className="text-sm text-gray-700 mb-2">{r.descripcion}</p>
             {r.adjuntos.filter((a) => !a.esRespuesta).length > 0 && (

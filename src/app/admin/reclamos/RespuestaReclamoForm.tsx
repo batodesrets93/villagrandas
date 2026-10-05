@@ -118,7 +118,7 @@ export default function RespuestaReclamoForm({
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex items-center justify-between">
         <label className="text-xs text-gray-500 flex items-center gap-1">
-          <input type="checkbox" name="cerrar" /> Marcar como cerrado
+          <input type="checkbox" name="cerrar" /> Respuesta final: responder y cerrar el reclamo
         </label>
         <button disabled={enviando} className="btn btn-primary text-xs">
           {enviando ? "Enviando..." : "Responder"}

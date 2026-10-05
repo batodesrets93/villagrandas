@@ -13,7 +13,7 @@ export default async function PropietarioLayout({ children }: { children: React.
 
   return (
     <div>
-      <NavPropietario />
+      <NavPropietario unidadId={(session?.user as any)?.unidadId} />
       <main className="max-w-4xl mx-auto px-4 py-6">{children}</main>
     </div>
   );
