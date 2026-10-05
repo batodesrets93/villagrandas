@@ -4,9 +4,11 @@ import { totalGastosPeriodo } from "@/lib/gastosPeriodo";
 import EliminarPeriodoButton from "@/components/EliminarPeriodoButton";
 import EnviarEmailsButton from "@/components/EnviarEmailsButton";
 import BloquearPeriodoButton from "@/components/BloquearPeriodoButton";
+import OcultarPeriodoButton from "@/components/OcultarPeriodoButton";
 
 function money(n: number) {
-  return "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // \u00A0: que el "$" no quede en una línea y el importe en la otra.
+  return "$\u00A0" + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default async function ExpensasPage() {
@@ -54,8 +56,8 @@ export default async function ExpensasPage() {
                 <tr key={p.id}>
                   <td className="font-medium">{p.etiqueta}</td>
                   <td>{p.vencimiento.toLocaleDateString("es-AR")}</td>
-                  <td>{money(totalGastosPeriodo(p.gastos, p))}</td>
-                  <td>{money(deuda)}</td>
+                  <td className="whitespace-nowrap">{money(totalGastosPeriodo(p.gastos, p))}</td>
+                  <td className="whitespace-nowrap">{money(deuda)}</td>
                   <td className="text-xs whitespace-nowrap">
                     {p.cerrado ? (
                       <span className="inline-block rounded bg-gray-200 px-1.5 py-0.5 font-semibold text-gray-700">
@@ -85,6 +87,9 @@ export default async function ExpensasPage() {
                         </Link>
                       )}
                       <EnviarEmailsButton periodoId={p.id} etiqueta={p.etiqueta} />
+                      {!p.cerrado && visibles > 0 && (
+                        <OcultarPeriodoButton periodoId={p.id} etiqueta={p.etiqueta} />
+                      )}
                       <BloquearPeriodoButton periodoId={p.id} etiqueta={p.etiqueta} cerrado={p.cerrado} />
                       {!p.cerrado && <EliminarPeriodoButton periodoId={p.id} etiqueta={p.etiqueta} />}
                     </div>
