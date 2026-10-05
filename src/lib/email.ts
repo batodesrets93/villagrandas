@@ -104,6 +104,7 @@ export async function enviarRespuestaReclamoPorEmail(opts: {
   titulo: string;
   respuesta: string;
   cerrado: boolean;
+  adjuntos?: { filename: string; content: Buffer; contentType: string }[];
 }) {
   const t = getTransporter();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
@@ -121,6 +122,7 @@ export async function enviarRespuestaReclamoPorEmail(opts: {
         : `Podés ver el estado del reclamo ingresando a tu cuenta.\n\n`) +
       `Administración Torres Villa Grandas\n` +
       `Administración Joaquín Rigueiro · Cel. 223 5919009`,
+    attachments: opts.adjuntos?.length ? opts.adjuntos : undefined,
   });
 }
 

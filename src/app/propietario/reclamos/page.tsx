@@ -36,7 +36,7 @@ export default async function ReclamosPropietarioPage() {
   const reclamos = await prisma.reclamo.findMany({
     where: { unidadId: session!.user.unidadId! },
     orderBy: { createdAt: "desc" },
-    include: { adjuntos: { select: { id: true, nombreArchivo: true } } },
+    include: { adjuntos: { select: { id: true, nombreArchivo: true, esRespuesta: true }, orderBy: { createdAt: "asc" } } },
   });
 
   return (
@@ -61,9 +61,9 @@ export default async function ReclamosPropietarioPage() {
               <span className={`text-xs px-2 py-1 rounded-full ${badge[r.estado]}`}>{r.estado}</span>
             </div>
             <p className="text-sm text-gray-700 mb-2">{r.descripcion}</p>
-            {r.adjuntos.length > 0 && (
+            {r.adjuntos.filter((a) => !a.esRespuesta).length > 0 && (
               <ul className="flex flex-wrap gap-2 mb-2">
-                {r.adjuntos.map((a) => (
+                {r.adjuntos.filter((a) => !a.esRespuesta).map((a) => (
                   <li key={a.id}>
                     <a
                       href={`/api/reclamos-adjuntos/${a.id}`}
@@ -82,6 +82,16 @@ export default async function ReclamosPropietarioPage() {
               <div className="bg-brand-50 border border-brand-100 rounded-lg p-3 text-sm">
                 <span className="font-medium">Respuesta de administración: </span>
                 {r.respuesta}
+                {r.adjuntos.some((a) => a.esRespuesta) && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {r.adjuntos.filter((a) => a.esRespuesta).map((a) => (
+                      <a key={a.id} href={`/api/reclamos-adjuntos/${a.id}`} target="_blank" rel="noopener noreferrer" title={a.nombreArchivo}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={`/api/reclamos-adjuntos/${a.id}`} alt={a.nombreArchivo} className="h-24 w-24 object-cover rounded border" />
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { responderReclamoAction } from "@/lib/actions";
+import RespuestaReclamoForm from "./RespuestaReclamoForm";
 
 const badge: Record<string, string> = {
   ABIERTO: "bg-red-100 text-red-700",
@@ -32,7 +32,7 @@ const categoriaLabel: Record<string, string> = {
 export default async function ReclamosAdminPage() {
   const reclamos = await prisma.reclamo.findMany({
     orderBy: { createdAt: "desc" },
-    include: { unidad: true, usuario: true, adjuntos: { select: { id: true, nombreArchivo: true } } },
+    include: { unidad: true, usuario: true, adjuntos: { select: { id: true, nombreArchivo: true, esRespuesta: true }, orderBy: { createdAt: "asc" } } },
   });
 
   return (
@@ -59,9 +59,9 @@ export default async function ReclamosAdminPage() {
             </div>
             <p className="text-sm text-gray-700 mb-3">{r.descripcion}</p>
 
-            {r.adjuntos.length > 0 && (
+            {r.adjuntos.filter((a) => !a.esRespuesta).length > 0 && (
               <ul className="flex flex-wrap gap-2 mb-3">
-                {r.adjuntos.map((a) => (
+                {r.adjuntos.filter((a) => !a.esRespuesta).map((a) => (
                   <li key={a.id}>
                     <a
                       href={`/api/reclamos-adjuntos/${a.id}`}
@@ -81,20 +81,21 @@ export default async function ReclamosAdminPage() {
               <div className="bg-brand-50 border border-brand-100 rounded-lg p-3 mb-3 text-sm">
                 <span className="font-medium">Respuesta de administración: </span>
                 {r.respuesta}
+                {r.adjuntos.some((a) => a.esRespuesta) && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {r.adjuntos.filter((a) => a.esRespuesta).map((a) => (
+                      <a key={a.id} href={`/api/reclamos-adjuntos/${a.id}`} target="_blank" rel="noopener noreferrer" title={a.nombreArchivo}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={`/api/reclamos-adjuntos/${a.id}`} alt={a.nombreArchivo} className="h-24 w-24 object-cover rounded border" />
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
             {r.estado !== "CERRADO" && (
-              <form action={responderReclamoAction} className="space-y-2">
-                <input type="hidden" name="reclamoId" value={r.id} />
-                <textarea name="respuesta" placeholder="Escribir respuesta..." rows={2} defaultValue={r.respuesta ?? ""} />
-                <div className="flex items-center justify-between">
-                  <label className="text-xs text-gray-500 flex items-center gap-1">
-                    <input type="checkbox" name="cerrar" /> Marcar como cerrado
-                  </label>
-                  <button className="btn btn-primary text-xs">Responder</button>
-                </div>
-              </form>
+              <RespuestaReclamoForm reclamoId={r.id} respuestaActual={r.respuesta ?? ""} />
             )}
           </div>
         ))}

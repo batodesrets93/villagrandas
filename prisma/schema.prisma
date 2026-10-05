@@ -417,6 +417,7 @@ model AdjuntoReclamo {
   tipoArchivo   String
   tamanio       Int
   datos         Bytes
+  esRespuesta   Boolean  @default(false)
   createdAt     DateTime @default(now())
 }
 
