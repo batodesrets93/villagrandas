@@ -10,6 +10,7 @@ const LADO_MAXIMO = 1600;
 // Achica las fotos del celular antes de subirlas (si no, una sola foto puede
 // superar el límite de tamaño de la request).
 async function comprimirImagen(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) return file;
   if (file.type === "image/png" && file.size < 1024 * 1024) return file;
   try {
     const bitmap = await createImageBitmap(file);
@@ -44,16 +45,16 @@ export default function RespuestaReclamoForm({
     setError("");
     const elegidos = Array.from(e.target.files ?? []);
     if (inputRef.current) inputRef.current.value = "";
-    const noImagen = elegidos.find((f) => !f.type.startsWith("image/"));
-    if (noImagen) {
-      setError(noImagen.name + ": solo se pueden adjuntar imágenes.");
+    const noValido = elegidos.find((f) => f.type !== "application/pdf" && !f.type.startsWith("image/"));
+    if (noValido) {
+      setError(noValido.name + ": solo se pueden adjuntar PDF o imágenes.");
       return;
     }
     const comprimidos = await Promise.all(elegidos.map(comprimirImagen));
     setArchivos((prev) => {
       const todos = [...prev, ...comprimidos];
       if (todos.length > MAX_IMAGENES) {
-        setError("Podés adjuntar hasta " + MAX_IMAGENES + " imágenes.");
+        setError("Podés adjuntar hasta " + MAX_IMAGENES + " archivos.");
         return todos.slice(0, MAX_IMAGENES);
       }
       return todos;
@@ -85,12 +86,12 @@ export default function RespuestaReclamoForm({
 
       <div>
         <label className="text-xs text-gray-500 block mb-1">
-          Adjuntar imágenes a la respuesta (opcional, hasta {MAX_IMAGENES})
+          Adjuntar PDF o imágenes a la respuesta (opcional, hasta {MAX_IMAGENES})
         </label>
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="application/pdf,image/jpeg,image/png,image/webp"
           multiple
           onChange={onElegir}
           className="text-xs"
@@ -99,8 +100,15 @@ export default function RespuestaReclamoForm({
           <ul className="flex flex-wrap gap-2 mt-2">
             {archivos.map((f, i) => (
               <li key={i} className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={URL.createObjectURL(f)} alt={f.name} className="h-16 w-16 object-cover rounded border" />
+                {f.type === "application/pdf" ? (
+                  <div className="h-16 w-16 rounded border bg-gray-50 flex flex-col items-center justify-center text-[10px] text-gray-600 px-1 text-center overflow-hidden" title={f.name}>
+                    <span className="text-lg leading-none">📄</span>
+                    <span className="truncate w-full">{f.name}</span>
+                  </div>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={URL.createObjectURL(f)} alt={f.name} className="h-16 w-16 object-cover rounded border" />
+                )}
                 <button
                   type="button"
                   onClick={() => setArchivos((prev) => prev.filter((_, j) => j !== i))}

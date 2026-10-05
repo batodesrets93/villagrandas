@@ -37,7 +37,7 @@ export default async function ReclamosPropietarioPage() {
   const reclamos = await prisma.reclamo.findMany({
     where: { unidadId: session!.user.unidadId! },
     orderBy: { createdAt: "desc" },
-    include: { adjuntos: { select: { id: true, nombreArchivo: true, esRespuesta: true }, orderBy: { createdAt: "asc" } } },
+    include: { adjuntos: { select: { id: true, nombreArchivo: true, tipoArchivo: true, esRespuesta: true }, orderBy: { createdAt: "asc" } } },
   });
 
   const esNueva = (r: (typeof reclamos)[number]) =>
@@ -101,8 +101,12 @@ export default async function ReclamosPropietarioPage() {
                   <div className="flex flex-wrap gap-2 mt-2">
                     {r.adjuntos.filter((a) => a.esRespuesta).map((a) => (
                       <a key={a.id} href={`/api/reclamos-adjuntos/${a.id}`} target="_blank" rel="noopener noreferrer" title={a.nombreArchivo}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={`/api/reclamos-adjuntos/${a.id}`} alt={a.nombreArchivo} className="h-24 w-24 object-cover rounded border" />
+                        {a.tipoArchivo === "application/pdf" ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-brand-600 underline">📄 {a.nombreArchivo}</span>
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={`/api/reclamos-adjuntos/${a.id}`} alt={a.nombreArchivo} className="h-24 w-24 object-cover rounded border" />
+                        )}
                       </a>
                     ))}
                   </div>

@@ -1140,7 +1140,7 @@ export async function rechazarPagoInformadoAction(formData: FormData): Promise<R
 const TIPOS_ADJUNTO_RECLAMO_PERMITIDOS = ["application/pdf", "image/jpeg", "image/jpg", "image/png", "image/webp"];
 const TAMANIO_MAXIMO_ADJUNTO_RECLAMO = 8 * 1024 * 1024;
 const MAX_ADJUNTOS_RECLAMO = 5;
-const TIPOS_IMAGEN_RESPUESTA_PERMITIDOS = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+const TIPOS_ADJUNTO_RESPUESTA_PERMITIDOS = ["application/pdf", "image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 export async function crearReclamoAction(formData: FormData): Promise<ResultadoAccion> {
   try {
@@ -1219,14 +1219,14 @@ export async function responderReclamoAction(formData: FormData) {
     .filter((a): a is File => a instanceof File && a.size > 0);
 
   if (archivos.length > MAX_ADJUNTOS_RECLAMO) {
-    throw new Error("Podés adjuntar hasta " + MAX_ADJUNTOS_RECLAMO + " imágenes.");
+    throw new Error("Podés adjuntar hasta " + MAX_ADJUNTOS_RECLAMO + " archivos.");
   }
   for (const archivo of archivos) {
-    if (!TIPOS_IMAGEN_RESPUESTA_PERMITIDOS.includes(archivo.type)) {
-      throw new Error(archivo.name + ": solo se aceptan imágenes JPG, PNG o WEBP.");
+    if (!TIPOS_ADJUNTO_RESPUESTA_PERMITIDOS.includes(archivo.type)) {
+      throw new Error(archivo.name + ": solo se aceptan PDF o imágenes JPG, PNG o WEBP.");
     }
     if (archivo.size > TAMANIO_MAXIMO_ADJUNTO_RECLAMO) {
-      throw new Error(archivo.name + ": la imagen no puede superar los 8 MB.");
+      throw new Error(archivo.name + ": el archivo no puede superar los 8 MB.");
     }
   }
 
@@ -1243,7 +1243,7 @@ export async function responderReclamoAction(formData: FormData) {
   const adjuntosEmail: { filename: string; content: Buffer; contentType: string }[] = [];
   for (const archivo of archivos) {
     const buffer = Buffer.from(await archivo.arrayBuffer());
-    const nombre = archivo.name || "imagen";
+    const nombre = archivo.name || "adjunto";
     await prisma.adjuntoReclamo.create({
       data: {
         reclamoId,
