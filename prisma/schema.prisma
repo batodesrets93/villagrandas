@@ -381,6 +381,15 @@ model Reserva {
   cargo         CargoUnidadPeriodo? @relation(fields: [cargoId], references: [id])
   createdAt     DateTime            @default(now())
 
+  // Registro de la cancelación (solo se completa cuando estado = CANCELADA).
+  // Son columnas simples, sin relación, para no tocar el modelo Usuario.
+  // canceladaPorNombre/Rol guardan una "foto" de quién fue al momento de
+  // cancelar, por si el usuario se renombra o se desactiva después.
+  canceladaAt        DateTime?
+  canceladaPorId     String?
+  canceladaPorNombre String?
+  canceladaPorRol    String?
+
 // Antes había un @@unique([quinchoId, fecha, turno]) a nivel de base de
   // datos. Se sacó porque incluía también las reservas CANCELADA: al
   // cancelar una reserva la fila queda en la tabla (para no perder el

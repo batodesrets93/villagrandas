@@ -29,6 +29,7 @@ import {
   enviarAvisoPagoInformadoPorEmail,
   enviarConfirmacionReservaPorEmail,
   enviarAvisoReservaPorEmail,
+  enviarCancelacionReservaPorEmail,
 } from "@/lib/email";
 
 function detalleError(e: unknown): string {
@@ -983,15 +984,50 @@ export async function cancelarReservaAction(formData: FormData) {
   if (!session) throw new Error("No autorizado");
   const reservaId = String(formData.get("reservaId"));
 
-  const reserva = await prisma.reserva.findUniqueOrThrow({ where: { id: reservaId } });
+  const reserva = await prisma.reserva.findUniqueOrThrow({
+    where: { id: reservaId },
+    include: { quincho: true, unidad: { include: { usuarios: true } } },
+  });
   const esDueño = session.user.rol === "PROPIETARIO" && reserva.unidadId === session.user.unidadId;
   const esAdmin = session.user.rol === "ADMIN";
   if (!esDueño && !esAdmin) throw new Error("No autorizado");
   if (reserva.cargoId) throw new Error("No se puede cancelar: ya fue facturada en una liquidación.");
 
-  await prisma.reserva.update({ where: { id: reservaId }, data: { estado: "CANCELADA" } });
+  // Solo se cancela si sigue CONFIRMADA: evita registrar dos veces la
+  // cancelación (y mandar dos emails) si se hace doble clic.
+  const nombreCancela = session.user.name || session.user.email || "Usuario";
+  const { count } = await prisma.reserva.updateMany({
+    where: { id: reservaId, estado: "CONFIRMADA" },
+    data: {
+      estado: "CANCELADA",
+      canceladaAt: new Date(),
+      canceladaPorId: session.user.id,
+      canceladaPorNombre: nombreCancela,
+      canceladaPorRol: session.user.rol,
+    },
+  });
   revalidatePath("/propietario/reservas");
   revalidatePath("/admin/reservas");
+  if (count === 0) return;
+
+  try {
+    const destinatarios = Array.from(
+      new Set([
+        ...reserva.unidad.usuarios.filter((u) => u.activo).map((u) => u.email),
+        ...emailsAvisoAdmin(),
+      ].filter((e): e is string => !!e))
+    );
+    await enviarCancelacionReservaPorEmail({
+      to: destinatarios,
+      quinchoNombre: reserva.quincho.nombre,
+      fecha: reserva.fecha,
+      turno: reserva.turno,
+      unidadLabel: unidadLabel(reserva.unidad),
+      canceladaPor: `${nombreCancela} (${session.user.rol === "ADMIN" ? "administración" : "propietario"})`,
+    });
+  } catch (e) {
+    console.error("[cancelarReservaAction] No se pudo enviar el email de cancelación:", e);
+  }
 }
 
 const TIPOS_ADJUNTO_PAGO_PERMITIDOS = ["application/pdf", "image/jpeg", "image/jpg", "image/png", "image/webp"];

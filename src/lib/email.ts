@@ -168,6 +168,41 @@ export async function enviarConfirmacionReservaPorEmail(opts: {
 }
 
 /**
+ * Aviso de cancelación de una reserva de quincho. Va a los usuarios de la
+ * unidad y a los admins (ADMIN_NOTIFY_EMAIL), e indica quién la canceló.
+ */
+export async function enviarCancelacionReservaPorEmail(opts: {
+  to: string[];
+  quinchoNombre: string;
+  fecha: Date;
+  turno: "MEDIODIA" | "NOCHE";
+  unidadLabel: string;
+  canceladaPor: string;
+}) {
+  if (opts.to.length === 0) return;
+  const t = getTransporter();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
+  const appUrl = process.env.NEXTAUTH_URL || "https://villagrandas.vercel.app";
+
+  await t.sendMail({
+    from,
+    to: opts.to.join(","),
+    subject: `Torres Villa Grandas - Reserva cancelada: ${opts.quinchoNombre} ${opts.fecha.toLocaleDateString("es-AR")}`,
+    text:
+      `Hola,\n\n` +
+      `Se canceló la reserva del quincho ${opts.quinchoNombre} de la unidad ${opts.unidadLabel}:\n\n` +
+      `Fecha: ${opts.fecha.toLocaleDateString("es-AR")}\n` +
+      `Turno: ${turnoLabel(opts.turno)}\n` +
+      `Cancelada por: ${opts.canceladaPor}\n\n` +
+      `El monto de la reserva no se va a cargar en la liquidación de expensas.\n\n` +
+      `Si necesitás volver a reservar, podés hacerlo desde la app entrando a:\n` +
+      `${appUrl}/propietario/reservas\n\n` +
+      `Administración Torres Villa Grandas\n` +
+      `Administración Joaquín Rigueiro · Cel. 223 5919009`,
+  });
+}
+
+/**
  * Aviso a los admins cuando un propietario reserva un quincho desde la app.
  * Igual que con los pagos informados, se manda a todos los usuarios con rol
  * ADMIN activos, no a un email fijo.
