@@ -14,8 +14,20 @@ function money(n: number) {
 export default async function DetalleUnidadPage({ params }: { params: { id: string } }) {
   const unidad = await prisma.unidad.findUniqueOrThrow({
     where: { id: params.id },
-    include: { usuarios: { orderBy: { createdAt: "asc" } } },
+    include: {
+      usuarios: { orderBy: { createdAt: "asc" } },
+      accesosExtra: { include: { usuario: true }, orderBy: { createdAt: "asc" } },
+    },
   });
+
+  // Accesos de esta unidad: los usuarios cuya unidad por defecto es esta, mas los
+  // que llegaron por UsuarioUnidad (mismo email usado en varios deptos).
+  const accesos = [
+    ...unidad.usuarios.map((u) => ({ ...u, compartido: false })),
+    ...unidad.accesosExtra
+      .filter((a) => !unidad.usuarios.some((u) => u.id === a.usuario.id))
+      .map((a) => ({ ...a.usuario, compartido: true })),
+  ];
 
   const pagos = await prisma.pago.findMany({
     where: { cargo: { unidadId: unidad.id } },
@@ -55,14 +67,14 @@ export default async function DetalleUnidadPage({ params }: { params: { id: stri
       </div>
 
       <div className="card">
-        <h2 className="font-semibold mb-3">Accesos ({unidad.usuarios.length})</h2>
+        <h2 className="font-semibold mb-3">Accesos ({accesos.length})</h2>
 
-        {unidad.usuarios.length === 0 && (
+        {accesos.length === 0 && (
           <p className="text-sm text-gray-400 mb-3">Esta unidad todavía no tiene ningún acceso creado.</p>
         )}
 
         <div className="space-y-2">
-          {unidad.usuarios.map((u) => (
+          {accesos.map((u) => (
             <div
               key={u.id}
               className="border rounded-lg p-3"
@@ -82,6 +94,11 @@ export default async function DetalleUnidadPage({ params }: { params: { id: stri
                     {u.activo ? "Activo" : "Revocado"}
                   </span>
                   <div className="text-gray-500">{u.email}</div>
+                  {u.compartido && (
+                    <div className="text-xs text-gray-400">
+                      Mismo usuario que en otro depto: editar o revocar afecta a todos sus departamentos.
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <details>
@@ -134,8 +151,10 @@ export default async function DetalleUnidadPage({ params }: { params: { id: stri
               <input name="email" type="email" placeholder="email@ejemplo.com" required />
             </div>
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Contraseña (mín. 6)</label>
-              <input name="password" type="password" placeholder="••••••••" required />
+              <label className="text-xs text-gray-500 block mb-1">
+                Contraseña (mín. 6; dejala vacía si ese email ya tiene acceso en otro depto)
+              </label>
+              <input name="password" type="password" placeholder="••••••••" />
             </div>
             <button type="submit" className="btn btn-primary w-full">
               Crear acceso
