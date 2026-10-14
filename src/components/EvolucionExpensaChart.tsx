@@ -10,6 +10,12 @@ function moneyEntero(n: number) {
   return "$ " + Math.round(n).toLocaleString("es-AR", { maximumFractionDigits: 0 });
 }
 
+/** 4.26 -> "+4,3%"; -2 -> "-2,0%"; ~0 -> "0%". */
+function porcentajeConSigno(v: number) {
+  if (Math.abs(v) < 0.05) return "0%";
+  return (v > 0 ? "+" : "-") + Math.abs(v).toFixed(1).replace(".", ",") + "%";
+}
+
 /** "Septiembre/2026" -> "Sep/26". Si la etiqueta tiene otro formato, la deja como está. */
 function etiquetaCorta(etiqueta: string) {
   const m = etiqueta.trim().match(/^(\p{L}+)\D*(\d{2}|\d{4})$/u);
@@ -19,7 +25,8 @@ function etiquetaCorta(etiqueta: string) {
 
 /**
  * Gráfico de línea (SVG puro, sin librerías) con lo que le liquidaron a la
- * unidad cada mes, y debajo una explicación corta cuando el último mes subió.
+ * unidad cada mes, la variación porcentual respecto del mes anterior debajo de
+ * cada mes, y una explicación corta cuando el último mes subió.
  * Server component: no necesita interactividad en el cliente.
  */
 export default function EvolucionExpensaChart({ evolucion }: { evolucion: EvolucionExpensa }) {
@@ -27,11 +34,11 @@ export default function EvolucionExpensaChart({ evolucion }: { evolucion: Evoluc
   if (datos.length < 2) return null;
 
   const width = 560;
-  const height = 240;
+  const height = 256;
   const padLeft = 46;
   const padRight = 24;
   const padTop = 28;
-  const padBottom = 34;
+  const padBottom = 50;
   const plotW = width - padLeft - padRight;
   const plotH = height - padTop - padBottom;
 
@@ -42,7 +49,11 @@ export default function EvolucionExpensaChart({ evolucion }: { evolucion: Evoluc
   const x = (i: number) => padLeft + (i / (datos.length - 1)) * plotW;
   const y = (v: number) => padTop + plotH - (v / max) * plotH;
 
-  const puntos = datos.map((d, i) => ({ ...d, cx: x(i), cy: y(d.total) }));
+  const puntos = datos.map((d, i) => {
+    const anterior = i > 0 ? datos[i - 1].total : 0;
+    const variacion = i > 0 && anterior > 0 ? ((d.total - anterior) / anterior) * 100 : null;
+    return { ...d, cx: x(i), cy: y(d.total), variacion };
+  });
   const linea = puntos.map((p) => `${p.cx},${p.cy}`).join(" ");
   const area = `${puntos[0].cx},${padTop + plotH} ${linea} ${puntos[puntos.length - 1].cx},${padTop + plotH}`;
 
@@ -53,6 +64,8 @@ export default function EvolucionExpensaChart({ evolucion }: { evolucion: Evoluc
   const paso = datos.length > 6 ? 2 : 1;
   const mostrarEtiqueta = (i: number) => (datos.length - 1 - i) % paso === 0;
 
+  const colorVariacion = (v: number) => (Math.abs(v) < 0.05 ? "#6b7280" : v > 0 ? "#b91c1c" : "#15803d");
+
   const ultimo = puntos[puntos.length - 1];
   const primero = datos[0].total;
   const variacionTotal = primero > 0 ? Math.round(((ultimo.total - primero) / primero) * 100) : null;
@@ -61,7 +74,8 @@ export default function EvolucionExpensaChart({ evolucion }: { evolucion: Evoluc
     <div className="card">
       <h2 className="font-semibold">Evolución de tu expensa</h2>
       <p className="text-xs text-gray-400 mb-3">
-        Lo que se te liquidó en cada uno de los últimos {datos.length} meses.
+        Lo que se te liquidó en cada uno de los últimos {datos.length} meses. Debajo de cada mes, la variación
+        respecto del mes anterior.
       </p>
 
       <svg
@@ -69,7 +83,7 @@ export default function EvolucionExpensaChart({ evolucion }: { evolucion: Evoluc
         width="100%"
         height={height}
         role="img"
-        aria-label={`Evolución de tu expensa en los últimos ${datos.length} meses`}
+        aria-label={`Evolución de tu expensa en los últimos ${datos.length} meses, con la variación respecto del mes anterior`}
       >
         {gridLines.map((gy, i) => (
           <line key={i} x1={padLeft} y1={gy} x2={width - padRight} y2={gy} stroke="#f3f4f6" strokeWidth={1} />
@@ -94,7 +108,10 @@ export default function EvolucionExpensaChart({ evolucion }: { evolucion: Evoluc
             stroke={i === puntos.length - 1 ? "#fff" : "none"}
             strokeWidth={2}
           >
-            <title>{`${p.etiqueta}: ${moneyEntero(p.total)}`}</title>
+            <title>
+              {`${p.etiqueta}: ${moneyEntero(p.total)}` +
+                (p.variacion !== null ? ` (${porcentajeConSigno(p.variacion)} vs. mes anterior)` : "")}
+            </title>
           </circle>
         ))}
 
@@ -107,13 +124,30 @@ export default function EvolucionExpensaChart({ evolucion }: { evolucion: Evoluc
             <text
               key={p.cargoId}
               x={p.cx}
-              y={height - 10}
+              y={height - 27}
               fontSize="10"
               fill={i === puntos.length - 1 ? "#1c4534" : "#9ca3af"}
               fontWeight={i === puntos.length - 1 ? 700 : 400}
               textAnchor="middle"
             >
               {etiquetaCorta(p.etiqueta)}
+            </text>
+          ) : null
+        )}
+
+        {/* Variación respecto del mes anterior, en todos los meses menos el primero. */}
+        {puntos.map((p) =>
+          p.variacion !== null ? (
+            <text
+              key={`var-${p.cargoId}`}
+              x={p.cx}
+              y={height - 10}
+              fontSize="10"
+              fontWeight={700}
+              fill={colorVariacion(p.variacion)}
+              textAnchor="middle"
+            >
+              {porcentajeConSigno(p.variacion)}
             </text>
           ) : null
         )}
