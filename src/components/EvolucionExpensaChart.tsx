@@ -115,9 +115,22 @@ export default function EvolucionExpensaChart({ evolucion }: { evolucion: Evoluc
           </circle>
         ))}
 
-        <text x={ultimo.cx} y={ultimo.cy - 11} fontSize="11" fontWeight={700} fill="#1c4534" textAnchor="end">
-          {moneyEntero(ultimo.total)}
-        </text>
+        {/* Monto de cada mes arriba del punto (con muchos meses, uno de por medio y siempre el último). */}
+        {puntos.map((p, i) =>
+          mostrarEtiqueta(i) ? (
+            <text
+              key={`monto-${p.cargoId}`}
+              x={p.cx}
+              y={p.cy - 11}
+              fontSize="11"
+              fontWeight={i === puntos.length - 1 ? 700 : 500}
+              fill={i === puntos.length - 1 ? "#1c4534" : "#4b5563"}
+              textAnchor={i === 0 ? "start" : i === puntos.length - 1 ? "end" : "middle"}
+            >
+              {moneyEntero(p.total)}
+            </text>
+          ) : null
+        )}
 
         {puntos.map((p, i) =>
           mostrarEtiqueta(i) ? (
