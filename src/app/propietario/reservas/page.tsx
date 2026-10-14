@@ -7,6 +7,7 @@ import { es } from "date-fns/locale";
 import CalendarioReservas, { ReservaCalendario } from "@/components/CalendarioReservas";
 import { motivoNoReservable } from "@/lib/reservasReglas";
 import NuevaReservaForm from "./NuevaReservaForm";
+import UnidadActivaAviso from "@/components/UnidadActivaAviso";
 import DisponibilidadDia, { QuinchoDia, SlotDia } from "./DisponibilidadDia";
 
 const INFO_QUINCHO: Record<string, string> = {
@@ -92,6 +93,7 @@ export default async function ReservasPropietarioPage({
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-brand-700">Reservar quincho</h1>
+      <UnidadActivaAviso />
 
       <div className="card">
         <p className="text-sm text-gray-700 mb-2">

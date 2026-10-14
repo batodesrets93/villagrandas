@@ -26,18 +26,21 @@ export default function SelectorUnidad({
   }
 
   return (
-    <select
-      value={unidadIdActual}
-      onChange={onChange}
-      disabled={cambiando}
-      aria-label="Unidad"
-      className="text-xs sm:text-sm text-gray-900 rounded px-2 py-1"
-    >
-      {unidades.map((u) => (
-        <option key={u.id} value={u.id}>
-          {u.label}
-        </option>
-      ))}
-    </select>
+    <label className="inline-flex items-center gap-1.5 text-xs sm:text-sm">
+      <span className="opacity-80">Unidad:</span>
+      <select
+        value={unidadIdActual}
+        onChange={onChange}
+        disabled={cambiando}
+        aria-label="Unidad"
+        className="bg-white text-gray-900 font-semibold rounded px-2 py-1 border-2 border-white/80 shadow-sm"
+      >
+        {unidades.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

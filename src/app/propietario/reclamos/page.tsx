@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import NuevoReclamoForm from "./NuevoReclamoForm";
 import MarcarVistos from "./MarcarVistos";
+import UnidadActivaAviso from "@/components/UnidadActivaAviso";
 
 const badge: Record<string, string> = {
   ABIERTO: "bg-red-100 text-red-700",
@@ -48,6 +49,7 @@ export default async function ReclamosPropietarioPage() {
     <div className="space-y-6">
       <MarcarVistos />
       <h1 className="text-2xl font-bold text-brand-700">Reclamos/Sugerencias</h1>
+      <UnidadActivaAviso />
 
       {cantNuevas > 0 && (
         <div className="bg-green-50 border border-green-200 text-green-800 rounded-lg p-3 text-sm">
