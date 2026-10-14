@@ -6,6 +6,8 @@ import DescargarPdfButton from "@/components/DescargarPdfButton";
 import InformarPagoForm from "@/components/InformarPagoForm";
 import DatosPagoCard from "@/components/DatosPagoCard";
 import DesgloseLiquidacion from "@/components/DesgloseLiquidacion";
+import EvolucionExpensaChart from "@/components/EvolucionExpensaChart";
+import { armarEvolucionExpensa } from "@/lib/evolucionExpensa";
 
 function money(n: number) {
   return "$\u00A0" + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -61,6 +63,7 @@ export default async function PropietarioPage() {
   });
 
   const deudaActual = cargos[0]?.saldoActual ?? 0;
+  const evolucion = armarEvolucionExpensa(cargos, unidad);
 
   return (
     <div className="space-y-6">
@@ -87,6 +90,8 @@ export default async function PropietarioPage() {
           }`}
         />
       )}
+
+      <EvolucionExpensaChart evolucion={evolucion} />
 
       <div className="card">
         <h2 className="font-semibold mb-3">Historial de liquidaciones</h2>
