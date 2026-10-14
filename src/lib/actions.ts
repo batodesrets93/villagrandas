@@ -30,7 +30,9 @@ import {
   enviarConfirmacionReservaPorEmail,
   enviarAvisoReservaPorEmail,
   enviarCancelacionReservaPorEmail,
+  enviarRecuperoPasswordPorEmail,
 } from "@/lib/email";
+import { generarTokenRecupero, tokenValido, usuarioIdDeToken } from "@/lib/recuperarPassword";
 
 function detalleError(e: unknown): string {
   if (e && typeof e === "object") {
@@ -1390,6 +1392,71 @@ export async function cambiarPasswordAction(formData: FormData): Promise<Resulta
     return { ok: true, data: undefined };
   } catch (e) {
     console.error("[cambiarPasswordAction] Error inesperado:", e);
+    return { ok: false, error: "No se pudo cambiar la contraseña por un error inesperado. Probá de nuevo en un minuto." };
+  }
+}
+
+/**
+ * "Olvidé mi contraseña": manda un link por email. Siempre responde igual,
+ * exista o no el email, para no revelar quién tiene cuenta.
+ */
+export async function solicitarRecuperoPasswordAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    const email = String(formData.get("email") || "").toLowerCase().trim();
+    if (!email || !email.includes("@")) {
+      return { ok: false, error: "Ingresá tu email." };
+    }
+
+    const usuario = await prisma.usuario.findUnique({ where: { email } });
+    if (usuario && usuario.activo) {
+      const token = generarTokenRecupero(usuario);
+      const base = process.env.NEXTAUTH_URL || "https://villagrandas.vercel.app";
+      const link = base.replace(/\/$/, "") + "/restablecer?token=" + encodeURIComponent(token);
+      try {
+        await enviarRecuperoPasswordPorEmail({ to: usuario.email, nombre: usuario.nombre, link });
+      } catch (e) {
+        console.error("[solicitarRecuperoPasswordAction] No se pudo enviar el email:", e);
+      }
+    }
+
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[solicitarRecuperoPasswordAction] Error inesperado:", e);
+    return { ok: false, error: "No se pudo procesar el pedido. Probá de nuevo en un minuto." };
+  }
+}
+
+export async function restablecerPasswordAction(formData: FormData): Promise<ResultadoAccion> {
+  try {
+    const token = String(formData.get("token") || "");
+    const passwordNueva = String(formData.get("passwordNueva") || "");
+    const passwordNuevaRepetida = String(formData.get("passwordNuevaRepetida") || "");
+
+    if (!passwordNueva || !passwordNuevaRepetida) {
+      return { ok: false, error: "Completá los dos campos." };
+    }
+    if (passwordNueva.length < 6) {
+      return { ok: false, error: "La contraseña nueva tiene que tener al menos 6 caracteres." };
+    }
+    if (passwordNueva !== passwordNuevaRepetida) {
+      return { ok: false, error: "Las contraseñas no coinciden." };
+    }
+
+    const mensajeVencido = "El link no es válido o ya venció. Pedí uno nuevo desde \"Olvidé mi contraseña\".";
+    const info = usuarioIdDeToken(token);
+    if (!info) return { ok: false, error: mensajeVencido };
+
+    const usuario = await prisma.usuario.findUnique({ where: { id: info.usuarioId } });
+    if (!usuario || !usuario.activo || !tokenValido(token, usuario)) {
+      return { ok: false, error: mensajeVencido };
+    }
+
+    const nuevoHash = await bcrypt.hash(passwordNueva, 10);
+    await prisma.usuario.update({ where: { id: usuario.id }, data: { passwordHash: nuevoHash } });
+
+    return { ok: true, data: undefined };
+  } catch (e) {
+    console.error("[restablecerPasswordAction] Error inesperado:", e);
     return { ok: false, error: "No se pudo cambiar la contraseña por un error inesperado. Probá de nuevo en un minuto." };
   }
 }

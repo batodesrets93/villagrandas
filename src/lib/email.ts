@@ -275,3 +275,26 @@ export async function enviarLiquidacionPorEmail(opts: {
     ],
   });
 }
+
+/**
+ * Link para restablecer la contraseña ("Olvidé mi contraseña" en /login).
+ * El link vence en 1 hora y deja de servir apenas se cambia la contraseña.
+ */
+export async function enviarRecuperoPasswordPorEmail(opts: { to: string; nombre: string; link: string }) {
+  const t = getTransporter();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
+
+  await t.sendMail({
+    from,
+    to: opts.to,
+    subject: "Torres Villa Grandas - Restablecer tu contraseña",
+    text:
+      `Hola ${opts.nombre},\n\n` +
+      `Recibimos un pedido para restablecer la contraseña de tu cuenta en el sistema online de Torres Villa Grandas.\n\n` +
+      `Para elegir una contraseña nueva entrá a este link (vale por 1 hora y se puede usar una sola vez):\n` +
+      `${opts.link}\n\n` +
+      `Si no fuiste vos, ignorá este email: tu contraseña actual no se modificó.\n\n` +
+      `Administración Torres Villa Grandas\n` +
+      `Administración Joaquín Rigueiro · Cel. 223 5919009`,
+  });
+}
