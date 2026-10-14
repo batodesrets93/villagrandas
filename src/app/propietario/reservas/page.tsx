@@ -2,9 +2,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { cancelarReservaAction } from "@/lib/actions";
-import { startOfMonth, endOfMonth, parse, parseISO, isValid } from "date-fns";
+import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, parse, parseISO, isValid, format } from "date-fns";
+import { es } from "date-fns/locale";
 import CalendarioReservas, { ReservaCalendario } from "@/components/CalendarioReservas";
+import { motivoNoReservable } from "@/lib/reservasReglas";
 import NuevaReservaForm from "./NuevaReservaForm";
+import DisponibilidadDia, { QuinchoDia, SlotDia } from "./DisponibilidadDia";
 
 const INFO_QUINCHO: Record<string, string> = {
   Amparo: "Capacidad 12 personas · sin acceso a piscina",
@@ -26,10 +29,15 @@ export default async function ReservasPropietarioPage({
   const diaSeleccionado =
     searchParams.dia && isValid(parseISO(searchParams.dia)) ? parseISO(searchParams.dia) : undefined;
 
+  // Se trae todo lo que muestra la grilla (incluye los días sueltos de los meses
+  // vecinos), así al tocar uno de esos días no aparece "no hay reservas" por error.
   const ocupadas = await prisma.reserva.findMany({
     where: {
       estado: "CONFIRMADA",
-      fecha: { gte: startOfMonth(mesValido), lte: endOfMonth(mesValido) },
+      fecha: {
+        gte: startOfWeek(startOfMonth(mesValido), { weekStartsOn: 0 }),
+        lte: endOfWeek(endOfMonth(mesValido), { weekStartsOn: 0 }),
+      },
     },
     include: { unidad: true, quincho: true },
     orderBy: { fecha: "asc" },
@@ -57,6 +65,30 @@ export default async function ReservasPropietarioPage({
     puedeCancelar: r.unidadId === session!.user.unidadId && !r.cargoId,
   }));
 
+  // Disponibilidad por quincho y turno del día elegido en el calendario.
+  const diaISO = diaSeleccionado ? format(diaSeleccionado, "yyyy-MM-dd") : null;
+  let quinchosDia: QuinchoDia[] = [];
+  if (diaISO) {
+    const slotDe = (quinchoId: string, turno: "MEDIODIA" | "NOCHE"): SlotDia => {
+      const r = ocupadas.find(
+        (o) => o.quinchoId === quinchoId && o.turno === turno && o.fecha.toISOString().slice(0, 10) === diaISO
+      );
+      if (r) {
+        if (r.unidadId === session!.user.unidadId) return { tipo: "propia" };
+        return { tipo: "ocupado", unidad: `${r.unidad.torre === "GRANDE" ? "TG" : "TC"} ${r.unidad.piso}º${r.unidad.depto}` };
+      }
+      const motivo = motivoNoReservable(diaISO, turno);
+      return motivo ? { tipo: "no", motivo } : { tipo: "libre" };
+    };
+    quinchosDia = quinchos.map((q) => ({
+      id: q.id,
+      nombre: q.nombre,
+      info: INFO_QUINCHO[q.nombre] ?? "",
+      mediodia: slotDe(q.id, "MEDIODIA"),
+      noche: slotDe(q.id, "NOCHE"),
+    }));
+  }
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-brand-700">Reservar quincho</h1>
@@ -80,6 +112,28 @@ export default async function ReservasPropietarioPage({
           ))}
         </div>
       </div>
+
+      <div>
+        <h2 className="font-semibold mb-1 text-brand-700">Elegí un día en el calendario</h2>
+        <p className="text-sm text-gray-500 mb-3">
+          Tocá un día para ver qué quincho y turno están libres, y reservar ahí mismo.
+        </p>
+        <CalendarioReservas
+          mes={mesValido}
+          reservas={reservasCalendario}
+          diaSeleccionado={diaSeleccionado}
+          basePath="/propietario/reservas"
+        />
+      </div>
+
+      {diaISO && diaSeleccionado && (
+        <DisponibilidadDia
+          key={diaISO}
+          diaISO={diaISO}
+          diaTexto={format(diaSeleccionado, "EEEE d 'de' MMMM", { locale: es })}
+          quinchos={quinchosDia}
+        />
+      )}
 
       <NuevaReservaForm quinchos={quinchos.map((q) => ({ id: q.id, nombre: q.nombre }))} />
 
@@ -144,16 +198,6 @@ export default async function ReservasPropietarioPage({
           </table>
         </div>
       )}
-
-      <div>
-        <h2 className="font-semibold mb-3 text-brand-700">Disponibilidad</h2>
-        <CalendarioReservas
-          mes={mesValido}
-          reservas={reservasCalendario}
-          diaSeleccionado={diaSeleccionado}
-          basePath="/propietario/reservas"
-        />
-      </div>
     </div>
   );
 }

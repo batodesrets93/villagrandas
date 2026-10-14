@@ -5,6 +5,7 @@ import CambiarPasswordForm from "@/components/CambiarPasswordForm";
 import DescargarPdfButton from "@/components/DescargarPdfButton";
 import InformarPagoForm from "@/components/InformarPagoForm";
 import DatosPagoCard from "@/components/DatosPagoCard";
+import DesgloseLiquidacion from "@/components/DesgloseLiquidacion";
 
 function money(n: number) {
   return "$\u00A0" + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -46,6 +47,11 @@ export default async function PropietarioPage() {
         },
       },
       pagos: { orderBy: { fecha: "desc" } },
+      reservas: {
+        where: { estado: "CONFIRMADA" },
+        orderBy: { fecha: "asc" },
+        include: { quincho: { select: { nombre: true } } },
+      },
       pagosInformados: {
         orderBy: { createdAt: "desc" },
         include: { comprobantes: { select: { id: true, nombreArchivo: true } } },
@@ -90,7 +96,7 @@ export default async function PropietarioPage() {
         )}
 
         <div className="space-y-3">
-          {cargos.map((c) => (
+          {cargos.map((c, i) => (
             <div key={c.id} className="rounded-xl border border-gray-100 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -117,6 +123,22 @@ export default async function PropietarioPage() {
                   <span className="text-gray-700">{money(c.totalPagado)}</span>
                 </p>
               </div>
+
+              {/* Se ve abierto en la liquidación más reciente; en las anteriores, plegado. */}
+              <details open={i === 0} className="mt-2.5 pt-2.5 border-t border-gray-50">
+                <summary className="cursor-pointer text-xs text-brand-600 underline">
+                  Ver detalle de la liquidación
+                </summary>
+                <DesgloseLiquidacion
+                  cargo={c}
+                  reservas={c.reservas.map((r) => ({
+                    fecha: r.fecha,
+                    turno: r.turno,
+                    quinchoNombre: r.quincho.nombre,
+                  }))}
+                  totalMesAnterior={cargos[i + 1]?.total ?? null}
+                />
+              </details>
 
               <div className="flex items-center gap-4 mt-2.5 text-xs">
                 <DescargarPdfButton

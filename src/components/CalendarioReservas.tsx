@@ -103,6 +103,7 @@ export default function CalendarioReservas({
               <Link
                 key={key}
                 href={hrefDia(dia)}
+                scroll={false}
                 className="rounded-lg p-0.5 sm:p-1 text-xs block overflow-hidden"
                 style={{
                   background: enMes ? "white" : "#f7f8f7",
