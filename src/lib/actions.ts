@@ -645,34 +645,50 @@ export async function crearAccesoPropietarioAction(formData: FormData) {
   const unidadId = String(formData.get("unidadId"));
   const email = String(formData.get("email")).toLowerCase().trim();
   const nombre = String(formData.get("nombre"));
-  const password = String(formData.get("password"));
+  const password = String(formData.get("password") ?? "");
 
-  if (!email || !password || password.length < 6) {
-    throw new Error("Email y contraseña (mínimo 6 caracteres) son obligatorios.");
-  }
+  if (!email) throw new Error("El email es obligatorio.");
 
   const existente = await prisma.usuario.findUnique({ where: { email } });
 
+  if (existente) {
+    // El mismo email ya tiene acceso: se le suma esta unidad (propietario con
+    // mas de un departamento). No se toca su contraseña ni su nombre, y no se
+    // lo mueve de su unidad por defecto.
+    if (existente.rol !== "PROPIETARIO") {
+      throw new Error("Ese email pertenece a un usuario que no es propietario.");
+    }
+    if (existente.unidadId !== unidadId) {
+      await prisma.usuarioUnidad.upsert({
+        where: { usuarioId_unidadId: { usuarioId: existente.id, unidadId } },
+        update: {},
+        create: { usuarioId: existente.id, unidadId },
+      });
+    }
+    revalidatePath("/admin/unidades");
+    return;
+  }
+
+  if (!password || password.length < 6) {
+    throw new Error("Email y contraseña (mínimo 6 caracteres) son obligatorios.");
+  }
+
   const passwordHash = await bcrypt.hash(password, 10);
-  await prisma.usuario.upsert({
-    where: { email },
-    update: { unidadId, nombre, passwordHash },
-    create: { email, nombre, passwordHash, rol: "PROPIETARIO", unidadId },
+  await prisma.usuario.create({
+    data: { email, nombre, passwordHash, rol: "PROPIETARIO", unidadId },
   });
 
   revalidatePath("/admin/unidades");
 
-  if (!existente) {
-    const unidad = await prisma.unidad.findUnique({
-      where: { id: unidadId },
-      select: { torre: true, piso: true, depto: true },
-    });
-    if (unidad) {
-      try {
-        await enviarBienvenidaAccesoPorEmail({ to: email, nombre, unidadLabel: unidadLabel(unidad) });
-      } catch (e) {
-        console.error("[crearAccesoPropietarioAction] No se pudo enviar el email de bienvenida:", e);
-      }
+  const unidad = await prisma.unidad.findUnique({
+    where: { id: unidadId },
+    select: { torre: true, piso: true, depto: true },
+  });
+  if (unidad) {
+    try {
+      await enviarBienvenidaAccesoPorEmail({ to: email, nombre, unidadLabel: unidadLabel(unidad) });
+    } catch (e) {
+      console.error("[crearAccesoPropietarioAction] No se pudo enviar el email de bienvenida:", e);
     }
   }
 }

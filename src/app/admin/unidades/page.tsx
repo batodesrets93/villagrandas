@@ -6,7 +6,7 @@ export default async function UnidadesPage() {
   const [unidades, m2ComplementariosPorUnidad, totalM2Edificio] = await Promise.all([
     prisma.unidad.findMany({
       orderBy: [{ torre: "asc" }, { piso: "asc" }, { depto: "asc" }],
-      include: { usuarios: true },
+      include: { usuarios: true, accesosExtra: { include: { usuario: { select: { email: true } } } } },
     }),
     agruparM2ComplementariosPorUnidad(),
     calcularTotalM2Edificio(),
@@ -22,7 +22,7 @@ export default async function UnidadesPage() {
     cocheraM2: m2ComplementariosPorUnidad.get(u.id)?.cocheraM2 ?? 0,
     bauleraM2: m2ComplementariosPorUnidad.get(u.id)?.bauleraM2 ?? 0,
     esDesarrollador: u.esDesarrollador,
-    email: u.usuarios[0]?.email ?? null,
+    email: u.usuarios[0]?.email ?? u.accesosExtra[0]?.usuario.email ?? null,
   }));
 
   return (
@@ -31,7 +31,9 @@ export default async function UnidadesPage() {
       <p className="text-sm text-gray-600">
         79 unidades cargadas (Torre Grande: 57 · Torre Chica: 22), más la cuenta consolidada de Costa Tranvial que
         absorbe las cocheras y bauleras sin propietario asignado. Asigná un email y contraseña a cada propietario
-        para que pueda entrar a ver su cuenta corriente, reservar quincho y hacer reclamos. Tildá &quot;Edificio&quot;
+        para que pueda entrar a ver su cuenta corriente, reservar quincho y hacer reclamos. Si un propietario tiene
+        más de un departamento, usá el mismo email en cada uno (la contraseña se pide solo la primera vez) y va a
+        poder elegir la unidad desde el menú. Tildá &quot;Edificio&quot;
         en las unidades que son del desarrollador (no de un propietario real): quedan excluidas del ranking de
         deudores del dashboard. Las columnas Cochera/Baulera muestran los m² actualmente asignados a cada unidad;
         para asignar o reasignar cocheras y bauleras individuales, entrá a{" "}

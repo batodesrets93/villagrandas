@@ -2,6 +2,8 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import NavPropietario from "@/components/NavPropietario";
+import SessionProviderClient from "@/components/SessionProviderClient";
+import { unidadesDeUsuario } from "@/lib/unidadesUsuario";
 
 export default async function PropietarioLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -11,10 +13,12 @@ export default async function PropietarioLayout({ children }: { children: React.
     redirect("/login");
   }
 
+  const unidades = await unidadesDeUsuario((session!.user as any).id);
+
   return (
-    <div>
-      <NavPropietario unidadId={(session?.user as any)?.unidadId} />
+    <SessionProviderClient>
+      <NavPropietario unidadId={(session?.user as any)?.unidadId} unidades={unidades} />
       <main className="max-w-4xl mx-auto px-4 py-6">{children}</main>
-    </div>
+    </SessionProviderClient>
   );
 }

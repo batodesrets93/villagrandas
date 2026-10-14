@@ -163,7 +163,7 @@ export default function UnidadesTable({
                         <input type="hidden" name="unidadId" value={u.id} />
                         <input name="nombre" placeholder="Nombre" defaultValue={u.titular} required />
                         <input name="email" type="email" placeholder="Email" required />
-                        <input name="password" type="password" placeholder="Contraseña (mín. 6)" required />
+                        <input name="password" type="password" placeholder="Contraseña (mín. 6; vacía si el email ya tiene acceso)" />
                         <button type="submit" className="btn btn-primary w-full">
                           Guardar
                         </button>

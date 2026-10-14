@@ -2,6 +2,7 @@ import { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { usuarioTieneUnidad } from "@/lib/unidadesUsuario";
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
@@ -37,7 +38,17 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
+      // Un propietario con varios departamentos cambia de unidad desde el menu
+      // (useSession().update). Se valida contra la base que de verdad tenga
+      // acceso a esa unidad antes de cambiarla en el token.
+      if (trigger === "update" && token.rol === "PROPIETARIO" && token.id) {
+        const nuevaUnidadId = (session as any)?.unidadId;
+        if (typeof nuevaUnidadId === "string" && (await usuarioTieneUnidad(token.id as string, nuevaUnidadId))) {
+          token.unidadId = nuevaUnidadId;
+        }
+        return token;
+      }
       if (user) {
         token.rol = (user as any).rol;
         token.unidadId = (user as any).unidadId;

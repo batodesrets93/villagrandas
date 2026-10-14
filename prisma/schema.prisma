@@ -67,6 +67,9 @@ model Usuario {
   activo       Boolean   @default(true)
   unidadId     String?
   unidad       Unidad?   @relation(fields: [unidadId], references: [id])
+  // Un mismo email puede tener varias unidades (propietario con varios deptos).
+  // unidadId es la unidad por defecto al iniciar sesion; las demas viven aca.
+  unidadesExtra UsuarioUnidad[]
   reclamos     Reclamo[]
   reservas     Reserva[]
   createdAt    DateTime  @default(now())
@@ -106,6 +109,7 @@ model Unidad {
   esEspacioComun Boolean @default(false)
 
   usuarios     Usuario[]
+  accesosExtra UsuarioUnidad[]
   cargos       CargoUnidadPeriodo[]
   reservas     Reserva[]
   reclamos     Reclamo[]
@@ -114,6 +118,20 @@ model Unidad {
   lecturasGas  LecturaGas[]
 
   @@unique([torre, piso, depto])
+}
+
+// Acceso de un usuario propietario a una unidad adicional a su unidad por
+// defecto (Usuario.unidadId). Permite usar el mismo email para dos o mas
+// departamentos: el propietario elige con cual unidad trabajar desde el menu.
+model UsuarioUnidad {
+  id        String   @id @default(cuid())
+  usuarioId String
+  unidadId  String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  unidad    Unidad   @relation(fields: [unidadId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([usuarioId, unidadId])
 }
 
 // Cada cochera es su propia unidad complementaria, con su propio m2 y su

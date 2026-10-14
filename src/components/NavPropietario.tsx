@@ -1,6 +1,7 @@
 import Link from "next/link";
 import SignOutButton from "./SignOutButton";
 import { prisma } from "@/lib/prisma";
+import SelectorUnidad from "./SelectorUnidad";
 
 // Cantidad de reclamos/sugerencias de la unidad con una respuesta que todavía no vio.
 export async function contarRespuestasNuevas(unidadId: string | null | undefined) {
@@ -12,7 +13,13 @@ export async function contarRespuestasNuevas(unidadId: string | null | undefined
   return filas.filter((r) => !r.respuestaVistaAt || r.respuestaVistaAt < r.respondidoAt!).length;
 }
 
-export default async function NavPropietario({ unidadId }: { unidadId?: string | null }) {
+export default async function NavPropietario({
+  unidadId,
+  unidades = [],
+}: {
+  unidadId?: string | null;
+  unidades?: { id: string; label: string }[];
+}) {
   const nuevas = await contarRespuestasNuevas(unidadId);
   const links = [
     { href: "/propietario", label: "Mi cuenta", badge: 0 },
@@ -37,6 +44,7 @@ export default async function NavPropietario({ unidadId }: { unidadId?: string |
               )}
             </Link>
           ))}
+          {unidadId && <SelectorUnidad unidades={unidades} unidadIdActual={unidadId} />}
           <SignOutButton />
         </div>
       </div>
