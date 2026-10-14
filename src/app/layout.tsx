@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import "./globals.css";
+import BarraProgreso from "@/components/BarraProgreso";
 
 export const metadata: Metadata = {
   title: "Torres Villa Grandas - Administración",
@@ -24,7 +26,12 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body>
+        <Suspense fallback={null}>
+          <BarraProgreso />
+        </Suspense>
+        {children}
+      </body>
     </html>
   );
 }

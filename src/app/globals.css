@@ -132,3 +132,17 @@ td.sticky-col {
   font-weight: 600;
   white-space: nowrap;
 }
+
+/* Feedback al navegar: cursor "cargando" y barra de progreso animada. */
+body.navegando,
+body.navegando a,
+body.navegando button {
+  cursor: progress;
+}
+@keyframes barra-progreso {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+.barra-progreso {
+  animation: barra-progreso 1.1s ease-in-out infinite;
+}
