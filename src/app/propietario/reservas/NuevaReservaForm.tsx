@@ -3,12 +3,15 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { crearReservaAction } from "@/lib/actions";
+import CartelResultado, { CartelData } from "@/components/CartelResultado";
 
 export default function NuevaReservaForm({ quinchos }: { quinchos: { id: string; nombre: string }[] }) {
   const router = useRouter();
   const [error, setError] = useState("");
-  const [confirmado, setConfirmado] = useState(false);
+  const [cartel, setCartel] = useState<CartelData | null>(null);
   const [cargando, setCargando] = useState(false);
+  // Evita un segundo envío si se toca dos veces antes de que React deshabilite el botón.
+  const enviando = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   const hoy = new Date();
@@ -23,23 +26,41 @@ export default function NuevaReservaForm({ quinchos }: { quinchos: { id: string;
   );
 
   async function onSubmit(formData: FormData) {
+    if (enviando.current) return;
+    enviando.current = true;
     setError("");
-    setConfirmado(false);
     setCargando(true);
+    const quinchoNombre = quinchos.find((q) => q.id === String(formData.get("quinchoId")))?.nombre ?? "";
+    const [y, m, d] = String(formData.get("fecha") ?? "").split("-");
+    const turnoTxt = String(formData.get("turno")) === "NOCHE" ? "Noche" : "Mediodía";
     try {
       const resultado = await crearReservaAction(formData);
       if (resultado.ok) {
-        setConfirmado(true);
+        const yaExistia = !!resultado.data?.yaExistia;
+        setCartel({
+          tipo: yaExistia ? "aviso" : "ok",
+          titulo: yaExistia ? "Esta reserva ya estaba confirmada" : "¡Reserva confirmada!",
+          mensaje: yaExistia
+            ? "Ya tenías reservado este quincho para ese día y turno. No hace falta reservar de nuevo ni se cobra dos veces."
+            : "Tu reserva quedó registrada y te mandamos un email de confirmación. No hace falta reservar de nuevo.",
+          detalles: [
+            { etiqueta: "Quincho", valor: quinchoNombre },
+            ...(y && m && d ? [{ etiqueta: "Fecha", valor: `${d}/${m}/${y}` }] : []),
+            { etiqueta: "Turno", valor: turnoTxt },
+          ],
+        });
         formRef.current?.reset();
         router.refresh();
-        setTimeout(() => setConfirmado(false), 5000);
       } else {
         setError(resultado.error);
       }
     } catch (e: any) {
-      setError(e.message ?? "No se pudo crear la reserva");
+      setError(
+        "No pudimos confirmar si la reserva se hizo. Mirá en «Mis próximas reservas» antes de volver a intentar."
+      );
     } finally {
       setCargando(false);
+      enviando.current = false;
     }
   }
 
@@ -70,12 +91,10 @@ export default function NuevaReservaForm({ quinchos }: { quinchos: { id: string;
         </div>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      {confirmado && (
-        <p className="text-sm font-semibold text-green-700">✓ Reserva confirmada</p>
-      )}
       <button type="submit" disabled={cargando} className="btn btn-primary">
-        {cargando ? "Reservando..." : "Reservar ($ 50.000)"}
+        {cargando ? "Reservando... no cierres esta pantalla" : "Reservar ($ 50.000)"}
       </button>
+      <CartelResultado cartel={cartel} onCerrar={() => setCartel(null)} />
     </form>
   );
 }

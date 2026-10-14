@@ -814,7 +814,7 @@ export async function marcarExcluyeAdministracionBauleraAction(formData: FormDat
   revalidatePath("/admin/cocheras-bauleras");
 }
 
-export async function crearReservaAction(formData: FormData): Promise<ResultadoAccion> {
+export async function crearReservaAction(formData: FormData): Promise<ResultadoAccion<{ yaExistia?: boolean }>> {
   try {
     const session = await requirePropietario();
     const quinchoId = String(formData.get("quinchoId"));
@@ -865,6 +865,11 @@ export async function crearReservaAction(formData: FormData): Promise<ResultadoA
       where: { quinchoId, fecha, turno, estado: "CONFIRMADA" },
     });
     if (existente) {
+      // Si la reserva existente es de la misma unidad, casi seguro es un doble envío:
+      // se responde como confirmada (sin cobrar dos veces) en vez de mostrar un error.
+      if (existente.unidadId === session.user.unidadId) {
+        return { ok: true, data: { yaExistia: true } };
+      }
       return { ok: false, error: "Ese quincho ya está reservado para ese día y turno." };
     }
 
@@ -909,7 +914,7 @@ export async function crearReservaAction(formData: FormData): Promise<ResultadoA
       console.error("[crearReservaAction] No se pudieron enviar los emails de aviso:", e);
     }
 
-    return { ok: true, data: undefined };
+    return { ok: true, data: {} };
   } catch (e) {
     console.error("[crearReservaAction] Error inesperado:", e);
     return { ok: false, error: "No se pudo crear la reserva por un error inesperado. Probá de nuevo en un minuto." };
@@ -1034,7 +1039,7 @@ const TIPOS_ADJUNTO_PAGO_PERMITIDOS = ["application/pdf", "image/jpeg", "image/j
 const TAMANIO_MAXIMO_ADJUNTO_PAGO = 8 * 1024 * 1024;
 const MAX_ADJUNTOS_PAGO = 5;
 
-export async function informarPagoAction(formData: FormData): Promise<ResultadoAccion> {
+export async function informarPagoAction(formData: FormData): Promise<ResultadoAccion<{ yaExistia?: boolean }>> {
   try {
     const session = await requirePropietario();
     const cargoId = String(formData.get("cargoId"));
@@ -1067,10 +1072,8 @@ export async function informarPagoAction(formData: FormData): Promise<ResultadoA
       select: { id: true },
     });
     if (yaInformado) {
-      return {
-        ok: false,
-        error: "Ya informaste un pago pendiente por ese mismo monto para este período. Esperá a que la administración lo confirme.",
-      };
+      // Mismo monto ya pendiente: casi seguro es un doble envío, se informa sin error.
+      return { ok: true, data: { yaExistia: true } };
     }
 
     const archivos = formData
@@ -1126,7 +1129,7 @@ export async function informarPagoAction(formData: FormData): Promise<ResultadoA
       console.error("[informarPagoAction] No se pudo enviar el email de aviso:", e);
     }
 
-    return { ok: true, data: undefined };
+    return { ok: true, data: {} };
   } catch (e) {
     console.error("[informarPagoAction] Error inesperado:", e);
     return {

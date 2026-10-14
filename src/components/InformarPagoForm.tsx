@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { informarPagoAction } from "@/lib/actions";
+import CartelResultado, { CartelData } from "@/components/CartelResultado";
 
 const MEDIOS = ["Transferencia", "Depósito", "Efectivo", "Otro"];
 
@@ -61,24 +62,46 @@ export default function InformarPagoForm({ cargoId }: { cargoId: string }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState("");
-  const [ok, setOk] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [monto, setMonto] = useState("");
+  const [cartel, setCartel] = useState<CartelData | null>(null);
+  // Evita un segundo envío si se toca dos veces antes de que React deshabilite el botón.
+  const enviando = useRef(false);
 
   async function onSubmit(formData: FormData) {
+    if (enviando.current) return;
+    enviando.current = true;
     setError("");
-    setOk(false);
     setCargando(true);
-    const res = await informarPagoAction(formData);
-    setCargando(false);
-    if (!res.ok) {
-      setError(res.error);
-      return;
+    const montoInformado = String(formData.get("monto") ?? "");
+    const fechaInformada = String(formData.get("fecha") ?? "");
+    try {
+      const res = await informarPagoAction(formData);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      const [y, m, d] = fechaInformada.split("-");
+      setCartel({
+        tipo: res.data?.yaExistia ? "aviso" : "ok",
+        titulo: res.data?.yaExistia ? "Este pago ya estaba informado" : "¡Pago informado!",
+        mensaje: res.data?.yaExistia
+          ? "Ya habíamos recibido este pago y está pendiente de revisión. No hace falta enviarlo de nuevo."
+          : "Lo recibimos correctamente. La administración lo va a revisar y lo vas a ver en tu cuenta. No hace falta enviarlo de nuevo.",
+        detalles: [
+          { etiqueta: "Monto", valor: "$ " + montoInformado },
+          ...(y && m && d ? [{ etiqueta: "Fecha", valor: `${d}/${m}/${y}` }] : []),
+        ],
+      });
+      setMonto("");
+      formRef.current?.reset();
+      router.refresh();
+    } catch {
+      setError("No pudimos confirmar si el pago se envió. Revisá tu conexión y fijate en la lista de pagos informados antes de volver a intentar.");
+    } finally {
+      setCargando(false);
+      enviando.current = false;
     }
-    setOk(true);
-    setMonto("");
-    formRef.current?.reset();
-    router.refresh();
   }
 
   return (
@@ -125,10 +148,10 @@ export default function InformarPagoForm({ cargoId }: { cargoId: string }) {
         />
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
-      {ok && <p className="text-xs text-brand-600">Pago informado. La administración lo va a revisar.</p>}
       <button type="submit" disabled={cargando} className="btn btn-primary text-xs w-full">
-        {cargando ? "Enviando..." : "Informar pago"}
+        {cargando ? "Enviando... no cierres esta pantalla" : "Informar pago"}
       </button>
+      <CartelResultado cartel={cartel} onCerrar={() => setCartel(null)} />
     </form>
   );
 }
