@@ -33,6 +33,7 @@ import {
   enviarRecuperoPasswordPorEmail,
 } from "@/lib/email";
 import { generarTokenRecupero, tokenValido, usuarioIdDeToken } from "@/lib/recuperarPassword";
+import { esFechaSoloAdmin } from "@/lib/reservasReglas";
 
 function detalleError(e: unknown): string {
   if (e && typeof e === "object") {
@@ -841,6 +842,15 @@ export async function crearReservaAction(formData: FormData): Promise<ResultadoA
 
     if (isNaN(fecha.getTime())) {
       return { ok: false, error: "Elegí una fecha válida." };
+    }
+
+    // Fechas de fin de año que asigna la administración (ver reservasReglas.ts).
+    // El admin sí puede cargarlas con crearReservaAdminAction.
+    if (esFechaSoloAdmin(fecha.toISOString().slice(0, 10))) {
+      return {
+        ok: false,
+        error: "Esa fecha la asigna la administración. Comunicate con la administración para solicitarla.",
+      };
     }
 
     const HORA_INICIO_TURNO: Record<"MEDIODIA" | "NOCHE", { hora: number; minuto: number }> = {

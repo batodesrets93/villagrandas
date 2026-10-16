@@ -101,6 +101,10 @@ export default async function ReservasPropietarioPage({
         </p>
         <ul className="text-sm text-gray-600 list-disc pl-5 space-y-1">
           <li>Reservar con mínimo 24 horas de anticipación.</li>
+          <li>
+            Las fechas del 24, 25 y 31 de diciembre y 1 de enero las asigna la administración: comunicate con ella para
+            solicitarlas.
+          </li>
           <li>Turno mediodía: 9:00 a 15:30 (hasta 16:30 si no se usa el turno siguiente).</li>
           <li>Turno noche: 18:30 a 0:30 (2:00 am viernes, sábados y vísperas de feriado).</li>
           <li>No se pueden usar equipos de música ni parlantes (solo auriculares).</li>

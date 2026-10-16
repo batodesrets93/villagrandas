@@ -12,12 +12,28 @@ const HORA_INICIO_TURNO: Record<TurnoReserva, { hora: number; minuto: number }> 
 const OFFSET_ARGENTINA_HORAS = 3;
 
 /**
+ * Fechas que los propietarios NO pueden reservar por su cuenta: las asigna la
+ * administración (formulario de reserva de admin) para repartirlas con
+ * criterio de equidad entre los propietarios. Formato "YYYY-MM-DD".
+ * Para otro año, actualizar esta lista.
+ */
+export const FECHAS_SOLO_ADMIN: readonly string[] = ["2026-12-24", "2026-12-25", "2026-12-31", "2027-01-01"];
+
+export const MOTIVO_SOLO_ADMIN = "Reserva por administración";
+
+export function esFechaSoloAdmin(diaISO: string): boolean {
+  return FECHAS_SOLO_ADMIN.includes(diaISO);
+}
+
+/**
  * Devuelve el motivo por el que un turno NO se puede reservar, o null si se
  * puede. `diaISO` es "YYYY-MM-DD" (la fecha se guarda a medianoche UTC).
  */
 export function motivoNoReservable(diaISO: string, turno: TurnoReserva, ahora: Date = new Date()): string | null {
   const fecha = new Date(diaISO);
   if (isNaN(fecha.getTime())) return "Fecha inválida";
+
+  if (esFechaSoloAdmin(diaISO)) return MOTIVO_SOLO_ADMIN;
 
   const { hora, minuto } = HORA_INICIO_TURNO[turno];
   const inicioEvento = new Date(
